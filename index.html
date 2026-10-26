@@ -1,0 +1,550 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0E1117">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icono.png">
+<link rel="apple-touch-icon" href="icono.png">
+<title>Agenda RT</title>
+<style>
+:root{--bg:#0E1117;--panel:#1A2132;--content:#111827;--entry:#0B0F16;--hover:#1E2D45;--gold:#C9A84C;--gold2:#E8C97A;
+--golddk:#9A7A30;--txt:#E8EDF4;--mut:#8A94A6;--borde:#2A3448;--rojo:#C0392B;--verde:#3FA36B;--azul:#5B8DEF}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font:16px/1.4 "Segoe UI",Roboto,system-ui,sans-serif}
+button,input,select,textarea{font:inherit;color:inherit}
+header{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--borde);
+ padding:calc(env(safe-area-inset-top,0px) + 10px) 16px 10px;display:flex;align-items:center;gap:12px}
+header img{width:34px;height:34px;border-radius:6px}
+header h1{font:700 18px Georgia,serif;color:var(--gold);margin:0;flex:1;letter-spacing:.5px}
+header small{color:var(--mut);font-size:12px}
+main{padding:14px 16px calc(90px + env(safe-area-inset-bottom,0px));max-width:1100px;margin:0 auto}
+nav{position:fixed;bottom:0;left:0;right:0;z-index:6;background:#0B0F16;border-top:1px solid var(--borde);
+ display:flex;padding-bottom:env(safe-area-inset-bottom,0px)}
+nav button{flex:1;background:none;border:0;padding:10px 2px 9px;color:var(--mut);font-size:12px;display:flex;flex-direction:column;align-items:center;gap:3px}
+nav button span{font-size:21px;line-height:1}
+nav button.on{color:var(--gold)}
+h2{font:700 20px Georgia,serif;color:var(--gold);margin:4px 0 12px}
+h3{font-size:14px;letter-spacing:.8px;text-transform:uppercase;color:var(--gold2);margin:18px 0 8px}
+.tarjeta{background:var(--panel);border:1px solid var(--borde);border-radius:12px;padding:12px 14px;margin:8px 0;position:relative}
+.tarjeta.urg{border-left:4px solid var(--rojo)}.tarjeta.hoy{border-left:4px solid var(--gold)}.tarjeta.pers{border-left:4px solid var(--azul)}
+.t1{font-weight:600}.t2{color:var(--mut);font-size:13px;margin-top:3px}
+.fila{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.chip{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:5px;background:var(--entry);color:var(--mut);margin-right:4px}
+.chip.j{background:#173B2A;color:#6FCF97}.chip.a{background:#1B2E4A;color:#7FB2F0}.chip.c{background:#3A2E10;color:var(--gold2)}
+.btn{background:var(--entry);border:1px solid var(--borde);border-radius:10px;padding:10px 14px;color:var(--txt)}
+.btn.p{background:var(--gold);border-color:var(--gold);color:#0E1117;font-weight:700}
+.btn.s{padding:6px 10px;font-size:13px}
+.btn.ok{background:#1F4D35;border-color:#2E7A52}
+input,select,textarea{width:100%;background:var(--entry);border:1px solid var(--borde);border-radius:10px;padding:11px 12px;color:var(--txt)}
+textarea{min-height:70px}
+label{display:block;font-size:11px;font-weight:700;letter-spacing:.6px;color:var(--mut);margin:12px 0 4px;text-transform:uppercase}
+.vacio{color:var(--mut);padding:20px 4px;text-align:center}
+.seg{display:flex;background:var(--entry);border:1px solid var(--borde);border-radius:10px;overflow:hidden}
+.seg button{flex:1;border:0;background:none;padding:9px 6px;color:var(--mut)}
+.seg button.on{background:var(--golddk);color:#0E1117;font-weight:700}
+.chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px}
+.chips button{white-space:nowrap;border:1px solid var(--borde);background:var(--entry);border-radius:20px;padding:7px 13px;color:var(--mut)}
+.chips button.on{background:var(--golddk);color:#0E1117;border-color:var(--gold)}
+.cal{background:var(--panel);border-radius:12px;padding:10px;border:1px solid var(--borde)}
+.calcab{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.calcab b{font:700 17px Georgia,serif;color:var(--gold)}
+.rej{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.rej .d{text-align:center;font-size:11px;color:var(--mut);font-weight:700;padding:3px 0}
+.dia{aspect-ratio:1/0.85;border-radius:8px;background:var(--content);border:1px solid transparent;display:flex;flex-direction:column;
+ align-items:center;justify-content:center;font-size:15px;user-select:none;-webkit-user-select:none}
+.dia.fuera{opacity:.35}.dia.inh{background:var(--entry)}.dia.ev{background:var(--golddk);color:#0E1117;font-weight:700}
+.dia.ve{background:var(--rojo);color:#fff;font-weight:700}.dia.hoy{border-color:var(--gold)}.dia.sel{outline:2px solid var(--gold2)}
+.dia small{font-size:10px}
+.dos{display:grid;grid-template-columns:1fr;gap:14px}
+@media(min-width:820px){.dos{grid-template-columns:360px 1fr}}
+.fab{position:fixed;right:18px;bottom:calc(84px + env(safe-area-inset-bottom,0px));width:58px;height:58px;border-radius:50%;
+ background:var(--gold);color:#0E1117;font-size:32px;border:0;box-shadow:0 6px 18px #0008;z-index:7}
+.hoja{position:fixed;inset:0;background:#000a;z-index:20;display:flex;align-items:flex-end;justify-content:center}
+.hoja>div{background:var(--content);width:100%;max-width:720px;max-height:92vh;overflow:auto;border-radius:16px 16px 0 0;
+ padding:16px 16px calc(20px + env(safe-area-inset-bottom,0px));border-top:2px solid var(--gold)}
+@media(min-width:820px){.hoja{align-items:center}.hoja>div{border-radius:16px}}
+.hojacab{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.x{background:none;border:0;font-size:26px;color:var(--mut)}
+.ficha{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font-size:13px;background:var(--entry);border-radius:8px;padding:8px 10px;margin-top:8px}
+.ficha b{color:var(--mut);font-weight:600}
+mark{background:var(--gold2);color:#0E1117;border-radius:3px;padding:0 1px}
+a{color:var(--gold2)}
+.aviso{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(150px + env(safe-area-inset-bottom,0px));background:#1F4D35;
+ color:#fff;padding:10px 16px;border-radius:10px;z-index:30;box-shadow:0 4px 14px #0008}
+.aviso.err{background:#6B1E1E}
+.badge{background:#C0392B;color:#fff;border-radius:10px;padding:0 7px;margin-left:4px;font-size:12px}
+header .btn.p{white-space:nowrap}
+.login{max-width:420px;margin:8vh auto;background:var(--panel);border-radius:16px;padding:26px;border:1px solid var(--borde);text-align:center}
+.login img{width:92px;height:92px}
+.login h1{font:700 22px Georgia,serif;color:var(--gold);margin:8px 0 2px}
+.login label{text-align:left}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+/* Agenda RT para tablet — funciona SIN conexión.
+   Los datos viven en la tablet (IndexedDB). «Sincronizar» envía a la computadora lo capturado
+   y descarga lo más reciente. Solo la búsqueda de tesis necesita conexión. */
+const $ = (s, r=document) => r.querySelector(s);
+const esc = t => String(t ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const sa = t => String(t ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+const DIAS = ["domingo","lunes","martes","miércoles","jueves","viernes","sábado"];
+const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+const deIso = s => { const [a,m,d] = s.split("-").map(Number); return new Date(a, m-1, d); };
+const largo = s => { const d = deIso(s); return `${DIAS[d.getDay()]} ${d.getDate()} de ${MESES[d.getMonth()]}`; };
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+const numExp = e => { const n = String(e.num_expediente ?? "").trim(), a = String(e.ano ?? "").trim(); return a && !n.includes("/") ? `${n}/${a}` : n; };
+
+// ── almacenamiento local (IndexedDB) ───────────────────
+const DB = { db: null,
+  abrir() { return new Promise((ok, mal) => { const r = indexedDB.open("agenda_rt", 1);
+    r.onupgradeneeded = () => r.result.createObjectStore("kv");
+    r.onsuccess = () => { this.db = r.result; ok(); }; r.onerror = () => mal(r.error); }); },
+  leer(k) { return new Promise(ok => { const r = this.db.transaction("kv").objectStore("kv").get(k);
+    r.onsuccess = () => ok(r.result); r.onerror = () => ok(undefined); }); },
+  poner(k, v) { return new Promise((ok, mal) => { const t = this.db.transaction("kv", "readwrite");
+    t.objectStore("kv").put(v, k); t.oncomplete = ok; t.onerror = () => mal(t.error); }); },
+};
+let D = { eventos: [], expedientes: [], tribunales: [], categorias: null, meta: {}, cola: [] };
+let SES = null;      // {token, usuario}
+// En GitHub Pages (https) no hay computadora: la app trabaja sola y se sincroniza por archivo.
+const HAY_PC = !/github\.io$/.test(location.hostname);
+const CAT_BASE = {categorias: {"Asunto del despacho": ["Tarea","Audiencia","Diligencia","Vencimiento","Vigilancia","Promoción / escrito","Cita con cliente","Revisión de expediente","Otro"],
+  "Personal / otro": ["Reunión","Cita","Recordatorio","Pago o trámite","Llamada","Personal","Otro"]},
+  requiere: ["Audiencia","Diligencia","Promoción / escrito","Revisión de expediente","Vencimiento","Vigilancia"],
+  defecto: {"Audiencia":"60,1440","Diligencia":"60,1440","Vencimiento":"1440","Vigilancia":"1440","Cita con cliente":"60","Cita":"60","Reunión":"30"}};
+async function cargar() {
+  for (const k of Object.keys(D)) { const v = await DB.leer(k); if (v !== undefined) D[k] = v; }
+  SES = (await DB.leer("sesion")) || null;
+}
+const guardar = (...ks) => Promise.all(ks.map(k => DB.poner(k, D[k])));
+
+// ── comunicación con la computadora (solo al sincronizar / tesis) ──
+async function red(ruta, datos) {
+  const op = {headers: {"Authorization": "Bearer " + (SES?.token || "")}, cache: "no-store"};
+  if (datos !== undefined) { op.method = "POST"; op.headers["Content-Type"] = "application/json"; op.body = JSON.stringify(datos); }
+  if (!HAY_PC) throw new Error("Esta función necesita la computadora. Usa «Sincronizar» → archivo.");
+  let r;
+  try { r = await fetch(ruta, op); } catch(e) { throw new Error("No hay conexión con la computadora. Conéctate al mismo Wi-Fi y vuelve a intentar."); }
+  const j = await r.json().catch(() => ({error: "Respuesta inválida de la computadora"}));
+  if (r.status === 401) { const e = new Error(j.error || "Sesión vencida"); e.sesion = true; throw e; }
+  if (!r.ok) throw new Error(j.error || "Error");
+  return j;
+}
+function aviso(txt, err) {
+  const a = document.createElement("div"); a.className = "aviso" + (err ? " err" : ""); a.textContent = txt;
+  document.body.appendChild(a); setTimeout(() => a.remove(), 3200);
+}
+
+// ── acceso (la primera vez requiere conexión; después funciona sin ella) ──
+async function pantallaLogin(msg, alTerminar) {
+  if (!HAY_PC) return pantallaLocal(alTerminar);
+  let us = []; try { us = await red("/api/usuarios"); } catch(e) {}
+  const ult = SES?.usuario?.usuario || (await DB.leer("ultimo_usuario")) || "";
+  $("#app").innerHTML = `<div class="login"><img src="icono.png" alt=""><h1>TR ABOGADOS</h1>
+    <div style="color:var(--mut)">Agenda Jurídica · tablet</div>
+    ${us.length ? `<label>Usuario</label><select id="lu">${us.map(u => `<option value="${esc(u.usuario)}" ${u.usuario===ult?"selected":""}>${esc(u.nombre)} (${esc(u.usuario)})</option>`).join("")}</select>`
+      : `<label>Usuario</label><input id="lu" value="${esc(ult)}" autocapitalize="none">`}
+    <label>Contraseña</label><input id="lc" type="password" autocomplete="current-password">
+    <div id="lm" style="color:#E06C6C;min-height:22px;margin-top:8px">${esc(msg||"")}</div>
+    <button class="btn p" style="width:100%" id="lb">Entrar</button>
+    <div class="t2" style="margin-top:12px">Para entrar se necesita estar conectado al Wi-Fi de la computadora. Después la agenda funciona sin conexión.</div></div>`;
+  const go = async () => {
+    try {
+      const r = await red("/api/login", {usuario: $("#lu").value, clave: $("#lc").value});
+      SES = {token: r.token, usuario: r.usuario}; await DB.poner("sesion", SES); await DB.poner("ultimo_usuario", r.usuario.usuario);
+      if (alTerminar) return alTerminar();
+      if (!D.meta.ultima) await sincronizar(true);
+      iniciar();
+    } catch(e) { $("#lm").textContent = e.message; }
+  };
+  $("#lb").onclick = go; $("#lc").onkeydown = e => e.key === "Enter" && go(); $("#lc").focus();
+}
+async function pantallaLocal(alTerminar) {
+  const ult = (await DB.leer("ultimo_nombre")) || "";
+  $("#app").innerHTML = `<div class="login"><img src="icono.png" alt=""><h1>TR ABOGADOS</h1>
+    <div style="color:var(--mut)">Agenda Jurídica · tablet</div>
+    <label>Tu nombre</label><input id="ln" value="${esc(ult)}" placeholder="Ej. Lic. Abraham Alvarez">
+    <label>Usuario de la agenda (opcional)</label><input id="lu" autocapitalize="none" placeholder="Ej. aalvarez">
+    <div id="lm" style="color:#E06C6C;min-height:22px;margin-top:8px"></div>
+    <button class="btn p" style="width:100%" id="lb">Entrar</button>
+    <div class="t2" style="margin-top:12px">La agenda funciona en esta tablet sin internet. Para pasar tus datos a la computadora usa «Sincronizar».</div></div>`;
+  $("#lb").onclick = async () => {
+    const n = $("#ln").value.trim(); if (!n) { $("#lm").textContent = "Escribe tu nombre"; return; }
+    SES = {token: "local", usuario: {nombre: n, usuario: $("#lu").value.trim() || "tablet"}};
+    await DB.poner("sesion", SES); await DB.poner("ultimo_nombre", n);
+    if (!D.categorias) { D.categorias = CAT_BASE; await guardar("categorias"); }
+    if (!D.tribunales.length) { try { D.tribunales = await (await fetch("tribunales.json")).json(); await guardar("tribunales"); } catch(e) {} }
+    if (alTerminar) return alTerminar();
+    iniciar();
+  };
+}
+async function salir() {
+  if (D.cola.length && !confirmarEn("Hay cambios sin sincronizar. Si sales, se conservan en la tablet y se enviarán la próxima vez.")) return;
+  SES = null; await DB.poner("sesion", null); pantallaLogin("");
+}
+function confirmarEn(t) { return window.confirm ? window.confirm(t) : true; }
+
+// ── sincronización ─────────────────────────────────────
+let SINCRONIZANDO = false;
+async function sincronizar(silencioso) {
+  if (SINCRONIZANDO) return; SINCRONIZANDO = true; pintarSync("Sincronizando…");
+  try {
+    let enviados = 0, errores = [];
+    if (D.cola.length) {
+      const r = await red("/api/sync/subir", {cambios: D.cola});
+      enviados = r.aplicados + r.repetidos; errores = r.errores || [];
+      const conError = new Set(errores.map(e => e.uid));
+      D.cola = D.cola.filter(c => conError.has(c.uid));          // lo rechazado se queda para revisarse
+      await guardar("cola");
+    }
+    const p = await red("/api/sync/descargar");
+    D.eventos = p.eventos; D.expedientes = p.expedientes; D.tribunales = p.tribunales; D.categorias = p.categorias;
+    // lo que sigue en la cola se vuelve a mostrar encima de lo descargado
+    for (const c of D.cola) aplicarLocal(c);
+    D.meta = {ultima: new Date().toISOString(), servidor: p.generado};
+    await guardar("eventos", "expedientes", "tribunales", "categorias", "meta");
+    if (!silencioso || enviados || errores.length)
+      aviso(errores.length ? `${errores.length} cambio(s) no se pudieron enviar: ${errores[0].error}` :
+            `Sincronizado${enviados ? ` · ${enviados} cambio(s) enviados` : ""} · ${D.eventos.length} eventos, ${D.expedientes.length} expedientes`, !!errores.length);
+    if (PANT) ir(PANT);
+  } catch(e) {
+    if (e.sesion) { SINCRONIZANDO = false; pintarSync(); return pantallaLogin("Vuelve a escribir tu contraseña para sincronizar.", () => { iniciar(); sincronizar(); }); }
+    aviso(e.message, 1);
+  } finally { SINCRONIZANDO = false; pintarSync(); }
+}
+function pintarSync(txt) {
+  const b = $("#bsync"); if (!b) return;
+  const n = D.cola.length;
+  b.innerHTML = txt ? `⟳ ${txt}` : `⟳ Sincronizar${n ? ` <span class="badge">${n}</span>` : ""}`;
+  const u = $("#ultsync");
+  if (u) u.textContent = D.meta.ultima ? "Última sincronización: " + new Date(D.meta.ultima).toLocaleString("es-MX", {dateStyle: "short", timeStyle: "short"}) : "Sin sincronizar";
+}
+
+// ── sincronizar por archivo (sin red con la computadora) ──
+function bajar(nombre, obj) {
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(obj, null, 1)], {type: "application/json"}));
+  a.download = nombre; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+function panelArchivo() {
+  const f = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "");
+  const v = hoja(`<div class="hojacab"><h2 style="margin:0">Sincronizar con la computadora</h2><button class="x">×</button></div>
+    <p class="t2">Sin red directa con la computadora, la sincronización se hace con un archivo (por OneDrive, correo o cable).</p>
+    <button class="btn p" style="width:100%" id="sx">⬆ Enviar mis cambios a la computadora (${D.cola.length})</button>
+    <div class="t2" style="margin:4px 0 14px">Descarga «cambios_tablet.json». Guárdalo en OneDrive; la agenda de la computadora lo importa.</div>
+    <label class="btn" style="width:100%;display:block;text-align:center;text-transform:none;letter-spacing:0;font-size:15px;color:var(--txt,inherit);margin:0">⬇ Recibir datos de la computadora<input id="si" type="file" accept=".json,application/json" hidden></label>
+    <div class="t2" style="margin:4px 0 14px">Elige el archivo «datos_agenda.json» que exporta la computadora. Tus cambios pendientes se conservan.</div>
+    <button class="btn" style="width:100%" id="sr">⤓ Respaldo completo de la tablet</button>
+`);
+  $("#sx").onclick = () => { if (!D.cola.length) return aviso("No hay cambios pendientes");
+    bajar(`cambios_tablet_${f}.json`, {formato: "agenda-rt-cambios", version: 1, generado: new Date().toISOString(), usuario: SES.usuario, cambios: D.cola});
+    aviso("Archivo generado. Los cambios siguen marcados hasta que recibas los datos de la computadora."); };
+  $("#sr").onclick = () => bajar(`respaldo_tablet_${f}.json`, {formato: "agenda-rt-respaldo", version: 1, generado: new Date().toISOString(), datos: D});
+  $("#si").onchange = async ev => {
+    try {
+      const p = JSON.parse(await ev.target.files[0].text());
+      if (p.formato === "agenda-rt-respaldo") { Object.assign(D, p.datos); }
+      else {
+        if (!Array.isArray(p.eventos) || !Array.isArray(p.expedientes)) throw new Error("El archivo no es de la Agenda RT");
+        const recibidos = new Set(p.aplicados || []);           // uids que la computadora ya registró
+        D.cola = D.cola.filter(c => !recibidos.has(c.uid));
+        D.eventos = p.eventos; D.expedientes = p.expedientes;
+        if (p.tribunales?.length) D.tribunales = p.tribunales; if (p.categorias) D.categorias = p.categorias;
+        for (const c of D.cola) aplicarLocal(c);
+      }
+      D.meta = {ultima: new Date().toISOString(), servidor: p.generado};
+      await guardar(...Object.keys(D)); v.remove(); pintarSync(); ir(PANT);
+      aviso(`Datos recibidos · ${D.eventos.length} eventos, ${D.expedientes.length} expedientes`);
+    } catch(e) { aviso("No se pudo leer el archivo: " + e.message, 1); }
+  };
+}
+
+// ── operaciones locales ────────────────────────────────
+function aplicarLocal(c) {
+  if (c.tipo === "crear_evento") {
+    if (!D.eventos.some(e => e.uid === c.uid)) D.eventos.push(Object.assign({}, c.local, {uid: c.uid, pendiente_sync: true}));
+  } else if (c.tipo === "completar") {
+    const e = D.eventos.find(x => (c.id && x.id === c.id) || (c.evento_uid && x.uid === c.evento_uid));
+    if (e) { e.estatus = "Completado"; e.pendiente_sync = true; }
+  }
+}
+async function encolar(c) { D.cola.push(c); aplicarLocal(c); await guardar("cola", "eventos"); pintarSync(); }
+
+function crearEventoLocal(d) {
+  const tipo = d.tipo, titulo = (d.titulo || "").trim();
+  if (!titulo) throw new Error("El título es obligatorio");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d.fecha || "")) throw new Error("Elige la fecha");
+  const despacho = d.categoria === "Asunto del despacho";
+  const exp = despacho && d.expediente_id ? D.expedientes.find(e => e.id === d.expediente_id) : null;
+  if (despacho && D.categorias.requiere.includes(tipo) && !exp) throw new Error(`Para «${tipo}» elige el expediente`);
+  const c = {uid: uid(), tipo: "crear_evento", datos: Object.assign({}, d, {expediente_id: exp ? exp.id : null}),
+    local: {id: null, tipo, fecha: d.fecha, hora: d.hora || "", titulo: exp ? `${titulo} · Exp. ${numExp(exp)}` : titulo,
+      expediente_id: exp ? exp.id : null, juzgado: d.lugar || exp?.juzgado || "", notas: d.notas || "", estatus: "Pendiente"}};
+  return encolar(c);
+}
+function completarLocal(ev) {
+  return encolar({uid: uid(), tipo: "completar", id: ev.id || null, evento_uid: ev.id ? null : ev.uid});
+}
+const pendientes = () => D.eventos.filter(e => e.estatus === "Pendiente" || e.estatus === "En proceso");
+const ordenar = l => l.slice().sort((a, b) => (a.fecha + (a.hora || "99")).localeCompare(b.fecha + (b.hora || "99")));
+
+// ── estructura ─────────────────────────────────────────
+const SECC = [["midia","☀","Mi día"],["agenda","📅","Agenda"],["exp","📁","Expedientes"],["tesis","⚖","Tesis"],["trib","🏛","Tribunales"]];
+let PANT = "midia";
+function iniciar() {
+  $("#app").innerHTML = `<header><img src="icono.png" alt=""><div style="flex:1;min-width:0"><h1>Agenda RT</h1>
+    <small>${esc(SES.usuario.nombre)} · <span id="ultsync"></span></small></div>
+    <button class="btn s p" id="bsync"></button><button class="btn s" id="bsalir">Salir</button></header>
+    <main id="main"></main><nav>${SECC.map(([k,i,t]) => `<button data-k="${k}"><span>${i}</span>${t}</button>`).join("")}</nav>`;
+  $("#bsalir").onclick = salir; $("#bsync").onclick = () => HAY_PC ? sincronizar(false) : panelArchivo();
+  document.querySelectorAll("nav button").forEach(b => b.onclick = () => ir(b.dataset.k));
+  pintarSync(); ir(PANT);
+}
+function ir(k) {
+  if (!$("#main")) return;
+  PANT = k;
+  document.querySelectorAll("nav button").forEach(b => b.classList.toggle("on", b.dataset.k === k));
+  document.querySelector(".fab")?.remove();
+  ({midia: verMiDia, agenda: verAgenda, exp: verExpedientes, tesis: verTesis, trib: verTribunales})[k]();
+}
+
+// ── eventos ────────────────────────────────────────────
+const personal = e => !e.expediente_id && D.categorias && D.categorias.categorias["Personal / otro"].includes(e.tipo) && !D.categorias.categorias["Asunto del despacho"].includes(e.tipo);
+function tarjetaEvento(e, clase) {
+  const k = e.id ? "i" + e.id : "u" + e.uid;
+  return `<div class="tarjeta ${clase||""} ${personal(e)?"pers":""}">
+    <div class="fila" style="justify-content:space-between"><div style="flex:1;min-width:0">
+      <div class="t1">${esc(e.titulo)}${e.pendiente_sync ? ' <span class="chip c">sin sincronizar</span>' : ""}</div>
+      <div class="t2">${e.fecha !== iso(new Date()) ? largo(e.fecha) + " · " : ""}${esc(e.hora || "sin hora")} · ${esc(e.tipo)}${e.juzgado ? " · " + esc(e.juzgado) : ""}</div>
+      ${e.notas ? `<div class="t2">${esc(e.notas)}</div>` : ""}</div>
+      ${e.estatus === "Completado" ? '<span class="chip j">Completado</span>' : `<button class="btn s ok" data-comp="${k}">✓ Completar</button>`}</div></div>`;
+}
+function ligarCompletar(rec) {
+  document.querySelectorAll("[data-comp]").forEach(b => b.onclick = async () => {
+    const k = b.dataset.comp, e = D.eventos.find(x => k[0] === "i" ? x.id == k.slice(1) : x.uid === k.slice(1));
+    if (e) { await completarLocal(e); aviso("Completada · se enviará al sincronizar"); rec(); }
+  });
+}
+function fab(fechaFn) {
+  const b = document.createElement("button"); b.className = "fab"; b.textContent = "+"; b.title = "Nuevo evento";
+  b.onclick = () => formEvento(fechaFn()); document.body.appendChild(b);
+}
+
+function verMiDia() {
+  const hoy = iso(new Date()), sem = new Date(); sem.setDate(sem.getDate() + 7);
+  const p = ordenar(pendientes());
+  const sec = (t, l, c) => `<h3>${t} (${l.length})</h3>` + (l.length ? l.map(e => tarjetaEvento(e, c)).join("") : `<div class="vacio">Nada pendiente.</div>`);
+  $("#main").innerHTML = `<h2>${largo(hoy).replace(/^./, c => c.toUpperCase())}</h2>` +
+    (D.cola.length ? `<div class="tarjeta" style="border-left:4px solid var(--gold)">Tienes ${D.cola.length} cambio(s) guardados en la tablet. Presiona <b>⟳ Sincronizar</b> cuando estés en el Wi-Fi de la computadora.</div>` : "") +
+    sec("Atrasados", p.filter(e => e.fecha < hoy), "urg") + sec("Hoy", p.filter(e => e.fecha === hoy), "hoy") +
+    sec("Próximos 7 días", p.filter(e => e.fecha > hoy && e.fecha <= iso(sem)), "");
+  ligarCompletar(verMiDia); fab(() => hoy);
+}
+
+let CAL = new Date(); CAL.setDate(1); let SEL = iso(new Date());
+let ULTIMO = {k: null, t: 0};   // último toque (sobrevive al redibujo del calendario)
+function verAgenda() {
+  const a = CAL.getFullYear(), mes = CAL.getMonth();
+  const ini = new Date(a, mes, 1), primero = new Date(ini); primero.setDate(1 - ((ini.getDay() + 6) % 7));
+  const porDia = {}; pendientes().forEach(e => (porDia[e.fecha] = porDia[e.fecha] || []).push(e));
+  const hoy = iso(new Date());
+  let celdas = ["L","M","M","J","V","S","D"].map(x => `<div class="d">${x}</div>`).join("");
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(primero); d.setDate(primero.getDate() + i); const k = iso(d), l = porDia[k] || [];
+    const venc = l.some(e => e.tipo === "Vencimiento" || e.tipo === "Vigilancia");
+    const cls = ["dia", d.getMonth() !== mes && "fuera", (d.getDay() === 0 || d.getDay() === 6) && "inh",
+      l.length && (venc ? "ve" : "ev"), k === hoy && "hoy", k === SEL && "sel"].filter(Boolean).join(" ");
+    celdas += `<div class="${cls}" data-dia="${k}">${d.getDate()}${l.length ? `<small>●${l.length}</small>` : ""}</div>`;
+  }
+  const lista = ordenar(D.eventos.filter(e => e.fecha === SEL));
+  $("#main").innerHTML = `<h2>Agenda</h2><div class="dos"><div><div class="cal"><div class="calcab">
+      <button class="btn s" id="cp">◀</button><b>${MESES[mes][0].toUpperCase() + MESES[mes].slice(1)} ${a}</b><button class="btn s" id="cn">▶</button></div>
+      <div class="rej">${celdas}</div>
+      <div class="t2" style="margin-top:8px">Toca un día para ver sus eventos; tócalo dos veces (o mantenlo presionado) para agregar uno.</div>
+      <button class="btn s" id="choy" style="margin-top:8px;width:100%">Ir a hoy</button></div></div>
+    <div><h3>${largo(SEL)} (${lista.length})</h3>${lista.length ? lista.map(e => tarjetaEvento(e, e.fecha < hoy && e.estatus !== "Completado" ? "urg" : e.fecha === hoy ? "hoy" : "")).join("") : `<div class="vacio">Sin eventos este día.</div>`}</div></div>`;
+  $("#cp").onclick = () => { CAL.setMonth(CAL.getMonth() - 1); verAgenda(); };
+  $("#cn").onclick = () => { CAL.setMonth(CAL.getMonth() + 1); verAgenda(); };
+  $("#choy").onclick = () => { CAL = new Date(); CAL.setDate(1); SEL = hoy; verAgenda(); };
+  let presion = null;
+  document.querySelectorAll("[data-dia]").forEach(c => {
+    c.onclick = () => {
+      const k = c.dataset.dia, t = Date.now();
+      if (ULTIMO.k === k && t - ULTIMO.t < 600) { ULTIMO = {k: null, t: 0}; return formEvento(k); }
+      ULTIMO = {k, t}; SEL = k;
+      const d = deIso(k); if (d.getMonth() !== CAL.getMonth()) CAL = new Date(d.getFullYear(), d.getMonth(), 1);
+      verAgenda();
+    };
+    c.addEventListener("touchstart", () => { presion = setTimeout(() => { presion = "hecho"; formEvento(c.dataset.dia); }, 650); }, {passive: true});
+    c.addEventListener("touchend", e => { if (presion === "hecho") e.preventDefault(); clearTimeout(presion); presion = null; });
+    c.addEventListener("touchmove", () => { clearTimeout(presion); presion = null; }, {passive: true});
+  });
+  ligarCompletar(verAgenda); fab(() => SEL);
+}
+
+function hoja(html) {
+  const h = document.createElement("div"); h.className = "hoja"; h.innerHTML = `<div>${html}</div>`;
+  h.onclick = e => { if (e.target === h) h.remove(); };
+  document.body.appendChild(h); h.querySelector(".x")?.addEventListener("click", () => h.remove());
+  return h;
+}
+function buscarExp(q) {
+  q = (q || "").trim(); const nums = q.match(/\d+/g) || [];
+  if (nums.length >= 2 && /^\s*\d+\s*[\/\-]\s*\d+\s*$/.test(q)) {
+    const [x, y] = nums, r = D.expedientes.filter(e => (String(e.num_expediente).trim() === x && String(e.ano).trim() === y) || (String(e.num_expediente).trim() === y && String(e.ano).trim() === x));
+    if (r.length) return r;
+  }
+  const t = sa(q).split(/\s+/).filter(Boolean);
+  const l = D.expedientes.filter(e => { const b = sa([e.identificador, numExp(e), e.actor, e.demandada, e.juzgado, e.materia, e.tipo_juicio, e.cliente].join(" ")); return t.every(w => b.includes(w)); });
+  return l.sort((a, b) => (+b.ano || 0) - (+a.ano || 0) || (+b.num_expediente || 0) - (+a.num_expediente || 0)).slice(0, 80);
+}
+function formEvento(fecha, expPre) {
+  const C = D.categorias; let cat = "Asunto del despacho", exp = expPre || null;
+  const h = hoja(`<div class="hojacab"><h2 style="margin:0">Nuevo evento</h2><button class="x">×</button></div>
+    <label>Categoría</label><div class="seg" id="fcat">${Object.keys(C.categorias).map(c => `<button data-c="${c}">${c}</button>`).join("")}</div>
+    <label>Tipo</label><select id="ftipo"></select>
+    <label>Título *</label><input id="ftit" placeholder="Ej. Audiencia de pruebas">
+    <div class="fila"><div style="flex:2"><label>Fecha *</label><input id="ffec" type="date" value="${fecha}"></div>
+      <div style="flex:1"><label>Hora</label><input id="fhor" type="time"></div></div>
+    <div id="fexpw"><label id="fexpl">Expediente</label><input id="fexp" placeholder="Número (917/2026), actor o demandado" autocomplete="off" value="${exp ? esc(numExp(exp) + " · " + exp.actor + " vs " + exp.demandada) : ""}">
+      <div id="fexpr"></div></div>
+    <label id="flugl">Juzgado / lugar</label><input id="flug" value="${exp ? esc(exp.juzgado || "") : ""}">
+    <label>Recordatorio (la computadora avisa)</label><div class="chips" id="frec">${[[15,"15 min"],[30,"30 min"],[60,"1 hora"],[1440,"1 día"]].map(([m,t]) => `<button data-m="${m}">${t} antes</button>`).join("")}</div>
+    <label>Notas</label><textarea id="fnot"></textarea>
+    <div id="fmsg" style="color:#E06C6C;min-height:22px;margin-top:8px"></div>
+    <button class="btn p" style="width:100%" id="fok">Guardar evento</button>`);
+  let recTocado = false;
+  const recDef = () => { if (recTocado) return; const d = (C.defecto[$("#ftipo", h).value] || ($("#fhor", h).value ? "30" : "1440")).split(",");
+    h.querySelectorAll("#frec button").forEach(b => b.classList.toggle("on", d.includes(b.dataset.m))); };
+  const pintarCat = () => {
+    h.querySelectorAll("#fcat button").forEach(b => b.classList.toggle("on", b.dataset.c === cat));
+    const t = $("#ftipo", h).value; $("#ftipo", h).innerHTML = C.categorias[cat].map(x => `<option ${x===t?"selected":""}>${x}</option>`).join("");
+    const desp = cat === "Asunto del despacho";
+    $("#fexpw", h).style.display = desp ? "" : "none"; $("#flugl", h).textContent = desp ? "Juzgado / lugar" : "Lugar";
+    $("#fexpl", h).textContent = desp && C.requiere.includes($("#ftipo", h).value) ? "Expediente *" : "Expediente (opcional)";
+    recDef();
+  };
+  h.querySelectorAll("#fcat button").forEach(b => b.onclick = () => { cat = b.dataset.c; pintarCat(); });
+  $("#ftipo", h).onchange = pintarCat; $("#fhor", h).onchange = recDef;
+  h.querySelectorAll("#frec button").forEach(b => b.onclick = () => { recTocado = true; b.classList.toggle("on"); });
+  $("#fexp", h).oninput = () => {
+    exp = null; const q = $("#fexp", h).value.trim(); if (q.length < 2) return $("#fexpr", h).innerHTML = "";
+    const r = buscarExp(q).slice(0, 8);
+    $("#fexpr", h).innerHTML = r.map(e => `<div class="tarjeta" data-e="${e.id}" style="padding:8px 12px">
+      <b>${esc(numExp(e))}</b> · ${esc(e.actor)} vs ${esc(e.demandada)}<div class="t2">${esc(e.juzgado)}</div></div>`).join("") || `<div class="t2">Sin coincidencias</div>`;
+    h.querySelectorAll("[data-e]").forEach(d => d.onclick = () => { exp = D.expedientes.find(x => x.id == d.dataset.e);
+      $("#fexp", h).value = `${numExp(exp)} · ${exp.actor} vs ${exp.demandada}`; $("#fexpr", h).innerHTML = "";
+      if (!$("#flug", h).value) $("#flug", h).value = exp.juzgado || ""; });
+  };
+  pintarCat();
+  $("#fok", h).onclick = async () => {
+    try {
+      await crearEventoLocal({categoria: cat, tipo: $("#ftipo", h).value, titulo: $("#ftit", h).value, fecha: $("#ffec", h).value,
+        hora: $("#fhor", h).value, expediente_id: exp && exp.id, lugar: $("#flug", h).value, notas: $("#fnot", h).value,
+        recordatorios: [...h.querySelectorAll("#frec button.on")].map(b => +b.dataset.m)});
+      SEL = $("#ffec", h).value; h.remove(); aviso("Guardado en la tablet · se enviará al sincronizar"); ir(PANT);
+    } catch(e) { $("#fmsg", h).textContent = e.message; }
+  };
+  setTimeout(() => $("#ftit", h).focus(), 150);
+}
+
+// ── expedientes ────────────────────────────────────────
+function verExpedientes() {
+  $("#main").innerHTML = `<h2>Expedientes</h2><input id="eq" placeholder="Buscar: 917/2026, 2026-917, actor, demandado o juzgado"><div id="el"></div>`;
+  const pintar = () => { const r = buscarExp($("#eq").value);
+    $("#el").innerHTML = (r.length ? r.map(e => `<div class="tarjeta" data-x="${e.id}"><div class="fila"><span class="chip c">${esc(e.materia)}</span><b>${esc(numExp(e))}</b>
+      <span class="chip">${esc(e.estatus||"")}</span></div><div class="t1" style="margin-top:4px">${esc(e.actor)} <span style="color:var(--mut)">vs</span> ${esc(e.demandada)}</div>
+      <div class="t2">${esc(e.juzgado)} · ${esc(e.tipo_juicio||"")}</div></div>`).join("") : `<div class="vacio">${D.expedientes.length ? "Sin resultados." : "Aún no hay datos en la tablet: presiona ⟳ Sincronizar."}</div>`);
+    document.querySelectorAll("[data-x]").forEach(c => c.onclick = () => detalle(+c.dataset.x)); };
+  let t; $("#eq").oninput = () => { clearTimeout(t); t = setTimeout(pintar, 150); }; pintar();
+}
+function detalle(id) {
+  const e = D.expedientes.find(x => x.id === id), tr = D.tribunales.find(t => t.id === e.tribunal_id);
+  const evs = ordenar(D.eventos.filter(v => v.expediente_id === id)).reverse();
+  const partes = rol => (e.partes || []).filter(p => p.rol === rol).map(p => `<div>${esc(p.representado ? `${p.representado} (por conducto de ${p.nombre})` : p.nombre)}${p.representante_comun ? ' <span class="chip c">Rep. común</span>' : ""}</div>`).join("") ||
+    esc(rol === "actor" ? e.actor : e.demandada);
+  const h = hoja(`<div class="hojacab"><h2 style="margin:0">Exp. ${esc(numExp(e))}</h2><button class="x">×</button></div>
+    <div class="fila"><span class="chip c">${esc(e.materia)}</span><span class="chip">${esc(e.estatus||"")}</span><span class="chip">${esc(e.tipo_juicio||"")}</span></div>
+    <div class="ficha"><b>Actor</b><div>${partes("actor")}</div><b>Demandado</b><div>${partes("demandado")}</div>
+      <b>Juzgado</b><div>${esc(e.juzgado)}</div>${tr && tr.telefono ? `<b>Teléfono</b><div><a href="tel:${esc(tr.telefono.replace(/[^\d+]/g,""))}">${esc(tr.telefono)}</a>${tr.extensiones ? " ext. " + esc(tr.extensiones) : ""}</div>` : ""}
+      ${tr && tr.direccion ? `<b>Dirección</b><div>${esc(tr.direccion)}</div>` : ""}
+      <b>Representamos</b><div>${esc(e.calidad||"")}</div><b>Responsable</b><div>${esc(e.abogado||"")}</div>
+      ${e.observaciones ? `<b>Notas</b><div>${esc(e.observaciones)}</div>` : ""}</div>
+    <h3>Eventos (${evs.length})</h3>${evs.map(v => `<div class="tarjeta ${v.estatus==="Completado"?"":"hoy"}" style="padding:8px 12px">
+      <div class="t1">${esc(v.titulo)}</div><div class="t2">${largo(v.fecha)} · ${esc(v.hora||"")} · ${esc(v.tipo)} · ${esc(v.estatus)}</div></div>`).join("") || `<div class="vacio">Sin eventos.</div>`}
+    <button class="btn p" style="width:100%;margin-top:10px" id="dnue">+ Agregar evento a este expediente</button>`);
+  $("#dnue", h).onclick = () => { h.remove(); formEvento(iso(new Date()), e); };
+}
+
+// ── tesis (requiere conexión con la computadora) ───────
+let TQ = {q: "", materia: "Civil"};
+function verTesis() {
+  $("#main").innerHTML = `<h2>Tesis y jurisprudencia</h2><div class="t2" style="margin-bottom:8px">La búsqueda de tesis necesita conexión con la computadora (consulta el Semanario Judicial en ese momento).</div>
+    <div class="fila"><input id="tq" style="flex:1" placeholder="Palabras clave o registro digital" value="${esc(TQ.q)}">
+    <button class="btn p" id="tb">Buscar</button></div><div class="chips" style="margin-top:10px" id="tm">${["Todas","Civil","Mercantil","Penal","Laboral","Administrativa","Común"].map(x => `<button data-m="${x}" class="${x===TQ.materia?"on":""}">${x}</button>`).join("")}</div>
+    <div id="tr" class="t2" style="margin-top:8px"></div><div id="tl"></div>`;
+  document.querySelectorAll("#tm button").forEach(b => b.onclick = () => { TQ.materia = b.dataset.m; verTesis(); if (TQ.q) buscarTesis(0); });
+  $("#tb").onclick = () => { TQ.q = $("#tq").value.trim(); buscarTesis(0); }; $("#tq").onkeydown = e => e.key === "Enter" && $("#tb").click();
+  if (TQ.q && TQ.res) pintarTesis(TQ.res);
+}
+function marcar(t, terms) {
+  let h = esc(t); const base = sa(h); const pos = [];
+  terms.forEach(w => { let i = base.indexOf(w); while (i >= 0) { pos.push([i, i + w.length]); i = base.indexOf(w, i + w.length); } });
+  pos.sort((a, b) => b[0] - a[0]); pos.forEach(([a, b]) => h = h.slice(0, a) + "<mark>" + h.slice(a, b) + "</mark>" + h.slice(b));
+  return h;
+}
+async function buscarTesis(p) {
+  if (!TQ.q) return;
+  $("#tr").textContent = "Buscando en el Semanario Judicial…"; if (!p) $("#tl").innerHTML = "";
+  try { const r = await red(`/api/tesis?q=${encodeURIComponent(TQ.q)}&materia=${encodeURIComponent(TQ.materia)}&pagina=${p}`);
+    if (p && TQ.res) { r.tesis = TQ.res.tesis.concat(r.tesis); r.excluidas += TQ.res.excluidas; } TQ.res = r; pintarTesis(r);
+  } catch(e) { $("#tr").textContent = e.sesion ? "Sesión vencida: sincroniza y vuelve a entrar." : e.message; }
+}
+function pintarTesis(r) {
+  $("#tr").textContent = `${r.total.toLocaleString()} encontradas en el SJF` + (TQ.materia !== "Todas" ? ` · solo materia ${TQ.materia.toLowerCase()} (${r.excluidas} de otra materia excluidas)` : "");
+  $("#tl").innerHTML = r.tesis.map((t, i) => `<div class="tarjeta"><div class="fila"><span class="chip ${t.jurisprudencia?"j":"a"}">${t.jurisprudencia?"JURISPRUDENCIA":"TESIS AISLADA"}</span>
+    <span class="chip c">${t.coinciden.length} de ${r.terminos.length} palabras</span></div>
+    <div class="t1" style="margin:6px 0;font-family:Georgia,serif">${marcar(t.rubro, r.terminos)}</div>
+    <div class="ficha">${t.ficha.filter(f => f[1]).map(([k, v]) => `<b>${esc(k)}</b><div>${esc(v)}</div>`).join("")}</div>
+    <div class="fila" style="margin-top:8px"><a class="btn s" href="${esc(t.url)}" target="_blank" rel="noopener">↗ Abrir en el SJF</a>
+    <button class="btn s" data-cp="${i}">⎘ Copiar ficha y rubro</button></div></div>`).join("") +
+    (r.tesis.length < r.total ? `<button class="btn" style="width:100%" id="tmas">Cargar más</button>` : "");
+  document.querySelectorAll("[data-cp]").forEach(b => b.onclick = () => { const t = r.tesis[b.dataset.cp];
+    const txt = t.ficha.filter(f => f[1]).map(([k, v]) => `${k}: ${v}`).join("\n") + "\n\n" + t.rubro;
+    (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(() => aviso("Copiado"), () => aviso("No se pudo copiar", 1)); });
+  const mas = $("#tmas"); if (mas) mas.onclick = () => buscarTesis((r.pagina || 0) + 1);
+}
+
+// ── tribunales (sin conexión) ──────────────────────────
+let TF = {distrito: "", materia: "", q: ""};
+function verTribunales() {
+  const dist = [...new Set(D.tribunales.map(t => t.distrito))].sort();
+  const l = D.tribunales.filter(t => (!TF.distrito || t.distrito === TF.distrito) &&
+    (!TF.materia || ("," + t.materias + ",").includes("," + TF.materia + ",")) &&
+    (!TF.q || sa(t.nombre + " " + (t.direccion||"") + " " + (t.telefono||"")).includes(sa(TF.q))));
+  $("#main").innerHTML = `<h2>Tribunales</h2><div class="fila"><select id="td" style="flex:1"><option value="">Todos los distritos</option>${dist.map(d => `<option ${d===TF.distrito?"selected":""}>${esc(d)}</option>`).join("")}</select>
+    <select id="tma" style="flex:1"><option value="">Todas las materias</option>${["Civil","Familiar","Mercantil","Penal","Laboral","Amparo"].map(x => `<option ${x===TF.materia?"selected":""}>${x}</option>`).join("")}</select></div>
+    <input id="tq2" style="margin-top:8px" placeholder="Buscar por nombre, dirección o teléfono" value="${esc(TF.q)}">
+    <div class="t2" style="margin-top:8px">${l.length} tribunal(es)</div>
+    ${l.map(t => `<div class="tarjeta"><div class="t1">${esc(t.nombre)}</div><div class="t2">${esc(t.distrito)} · ${esc((t.materias||"").replaceAll(",", ", "))}</div>
+      ${t.direccion ? `<div class="t2">📍 ${esc(t.direccion)}</div>` : ""}
+      ${t.telefono ? `<div style="margin-top:4px">📞 <a href="tel:${esc(t.telefono.replace(/[^\d+]/g,""))}">${esc(t.telefono)}</a>${t.extensiones ? " ext. " + esc(t.extensiones) : ""}</div>` : ""}</div>`).join("")}`;
+  $("#td").onchange = () => { TF.distrito = $("#td").value; verTribunales(); };
+  $("#tma").onchange = () => { TF.materia = $("#tma").value; verTribunales(); };
+  let t; $("#tq2").oninput = () => { clearTimeout(t); t = setTimeout(() => { TF.q = $("#tq2").value; verTribunales(); $("#tq2").focus(); const v = $("#tq2"); v.setSelectionRange(v.value.length, v.value.length); }, 300); };
+}
+
+// ── arranque ───────────────────────────────────────────
+(async () => {
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+  await DB.abrir(); await cargar();
+  if (SES && SES.token && D.categorias) iniciar();
+  else pantallaLogin("");
+})();
+</script>
+</body>
+</html>
