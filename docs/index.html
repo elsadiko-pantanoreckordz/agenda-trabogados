@@ -225,30 +225,96 @@ function pintarSync(txt) {
   if (u) u.textContent = D.meta.ultima ? "Última sincronización: " + new Date(D.meta.ultima).toLocaleString("es-MX", {dateStyle: "short", timeStyle: "short"}) : "Sin sincronizar";
 }
 
+// ── cifrado de los archivos de sincronización (AES-256-GCM + PBKDF2-SHA256, igual que la PC) ──
+// Cifra Y autentica: un archivo alterado o que no venga de tu agenda se rechaza.
+let CLAVE_SYNC = null;                       // solo en memoria mientras la app está abierta
+const SYNC_ITER = 600000, SYNC_MIN = 10;
+const aB64 = u8 => { let s = ""; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); };
+const deB64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+const aadSync = c => new TextEncoder().encode(`agenda-rt|${c}|v1`);
+async function llaveSync(clave, sal, iter) {
+  if (!(window.crypto && crypto.subtle)) throw new Error("Este navegador no permite cifrar (abre la app desde https)");
+  const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(clave), "PBKDF2", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey({name: "PBKDF2", hash: "SHA-256", salt: sal, iterations: iter}, base,
+    {name: "AES-GCM", length: 256}, false, ["encrypt", "decrypt"]);
+}
+async function cifrarSync(obj, clave, contenido) {
+  const sal = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({name: "AES-GCM", iv, additionalData: aadSync(contenido)},
+    await llaveSync(clave, sal, SYNC_ITER), new TextEncoder().encode(JSON.stringify(obj))));
+  return {formato: "agenda-rt-cifrado", version: 1, contenido, kdf: {alg: "PBKDF2-SHA256", iter: SYNC_ITER, sal: aB64(sal)},
+    cifrado: "AES-256-GCM", iv: aB64(iv), datos: aB64(ct)};
+}
+async function descifrarSync(s, clave, contenido) {
+  if (s.formato !== "agenda-rt-cifrado" || s.version !== 1 || s.contenido !== contenido) throw new Error("Este archivo no es del tipo esperado");
+  const it = Number(s.kdf && s.kdf.iter);
+  if (!s.kdf || s.kdf.alg !== "PBKDF2-SHA256" || !(it >= 100000 && it <= 5000000)) throw new Error("Archivo cifrado dañado");
+  let pl;
+  try {
+    pl = await crypto.subtle.decrypt({name: "AES-GCM", iv: deB64(s.iv), additionalData: aadSync(contenido)},
+      await llaveSync(clave, deB64(s.kdf.sal), it), deB64(s.datos));
+  } catch(e) { CLAVE_SYNC = null; throw new Error("La clave de sincronización no es correcta o el archivo fue alterado"); }
+  return JSON.parse(new TextDecoder().decode(pl));
+}
+function pedirClave() {                     // campo de contraseña (no se ve lo que escribes)
+  if (CLAVE_SYNC) return Promise.resolve(CLAVE_SYNC);
+  return new Promise(ok => {
+    const h = hoja(`<div class="hojacab"><h2 style="margin:0">Clave de sincronización</h2><button class="x">×</button></div>
+      <p class="t2">La misma que definiste en la agenda de la computadora (Agenda → ⟳ Sincronizar tablet). Mínimo ${SYNC_MIN} caracteres.</p>
+      <input id="kc" type="password" autocomplete="off">
+      <div id="km" style="color:#E06C6C;min-height:22px;margin-top:8px"></div>
+      <button class="btn p" style="width:100%" id="kb">Continuar</button>`);
+    let listo = false;
+    const fin = v => { if (listo) return; listo = true; h.remove(); ok(v); };
+    $(".x", h).addEventListener("click", () => fin(null));
+    h.onclick = e => { if (e.target === h) fin(null); };
+    const go = () => { const v = $("#kc", h).value; if (v.length < SYNC_MIN) return $("#km", h).textContent = `Mínimo ${SYNC_MIN} caracteres`;
+      CLAVE_SYNC = v; fin(v); };
+    $("#kb", h).onclick = go; $("#kc", h).onkeydown = e => e.key === "Enter" && go(); setTimeout(() => $("#kc", h).focus(), 50);
+  });
+}
+
 // ── sincronizar por archivo (sin red con la computadora) ──
 function bajar(nombre, obj) {
-  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(obj, null, 1)], {type: "application/json"}));
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(obj)], {type: "application/json"}));
   a.download = nombre; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
 }
+const CLAVES_D = ["eventos", "expedientes", "tribunales", "categorias", "meta", "cola"];
 function panelArchivo() {
   const f = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "");
   const v = hoja(`<div class="hojacab"><h2 style="margin:0">Sincronizar con la computadora</h2><button class="x">×</button></div>
-    <p class="t2">Sin red directa con la computadora, la sincronización se hace con un archivo (por OneDrive, correo o cable).</p>
+    <p class="t2">Sin red directa con la computadora, la sincronización se hace con un archivo cifrado (por OneDrive). Se pide la clave de sincronización.</p>
     <button class="btn p" style="width:100%" id="sx">⬆ Enviar mis cambios a la computadora (${D.cola.length})</button>
-    <div class="t2" style="margin:4px 0 14px">Descarga «cambios_tablet.json». Guárdalo en OneDrive; la agenda de la computadora lo importa.</div>
+    <div class="t2" style="margin:4px 0 14px">Descarga «cambios_tablet_….json». Guárdalo en OneDrive › Agenda RT; la agenda de la computadora lo importa.</div>
     <label class="btn" style="width:100%;display:block;text-align:center;text-transform:none;letter-spacing:0;font-size:15px;color:var(--txt,inherit);margin:0">⬇ Recibir datos de la computadora<input id="si" type="file" accept=".json,application/json" hidden></label>
-    <div class="t2" style="margin:4px 0 14px">Elige el archivo «datos_agenda.json» que exporta la computadora. Tus cambios pendientes se conservan.</div>
-    <button class="btn" style="width:100%" id="sr">⤓ Respaldo completo de la tablet</button>
+    <div class="t2" style="margin:4px 0 14px">Elige el archivo «datos_agenda.json» (OneDrive › Agenda RT). Tus cambios pendientes se conservan.</div>
+    <button class="btn" style="width:100%" id="sr">⤓ Respaldo completo de la tablet (cifrado)</button>
 `);
-  $("#sx").onclick = () => { if (!D.cola.length) return aviso("No hay cambios pendientes");
-    bajar(`cambios_tablet_${f}.json`, {formato: "agenda-rt-cambios", version: 1, generado: new Date().toISOString(), usuario: SES.usuario, cambios: D.cola});
-    aviso("Archivo generado. Los cambios siguen marcados hasta que recibas los datos de la computadora."); };
-  $("#sr").onclick = () => bajar(`respaldo_tablet_${f}.json`, {formato: "agenda-rt-respaldo", version: 1, generado: new Date().toISOString(), datos: D});
-  $("#si").onchange = async ev => {
+  $("#sx").onclick = async () => { if (!D.cola.length) return aviso("No hay cambios pendientes");
+    const clave = await pedirClave(); if (!clave) return;
     try {
-      const p = JSON.parse(await ev.target.files[0].text());
-      if (p.formato === "agenda-rt-respaldo") { Object.assign(D, p.datos); }
-      else {
+      bajar(`cambios_tablet_${f}.json`, await cifrarSync({formato: "agenda-rt-cambios", version: 1, generado: new Date().toISOString(), usuario: SES.usuario, cambios: D.cola}, clave, "cambios"));
+      aviso("Archivo cifrado generado. Los cambios siguen marcados hasta que recibas los datos de la computadora.");
+    } catch(e) { aviso(e.message, 1); } };
+  $("#sr").onclick = async () => { const clave = await pedirClave(); if (!clave) return;
+    try { bajar(`respaldo_tablet_${f}.json`, await cifrarSync({formato: "agenda-rt-respaldo", version: 1, generado: new Date().toISOString(), datos: D}, clave, "respaldo_tablet")); }
+    catch(e) { aviso(e.message, 1); } };
+  $("#si").onchange = async ev => {
+    const archivo = ev.target.files[0]; ev.target.value = "";
+    try {
+      if (!archivo) return;
+      if (archivo.size > 50 * 1024 * 1024) throw new Error("El archivo es demasiado grande");
+      let p = JSON.parse(await archivo.text());
+      if (p && p.formato === "agenda-rt-cifrado") {
+        if (!["datos_agenda", "respaldo_tablet"].includes(p.contenido)) throw new Error("Este archivo no es para recibir en la tablet");
+        const clave = await pedirClave(); if (!clave) return;
+        aviso("Descifrando…");
+        p = await descifrarSync(p, clave, p.contenido);
+      } else if (!confirmarEn("Este archivo NO está cifrado: no se puede comprobar que venga de tu computadora. ¿Usarlo de todos modos?")) return;
+      if (p.formato === "agenda-rt-respaldo") {
+        if (!p.datos || typeof p.datos !== "object") throw new Error("Respaldo dañado");
+        for (const k of CLAVES_D) if (k in p.datos) D[k] = p.datos[k];
+      } else {
         if (!Array.isArray(p.eventos) || !Array.isArray(p.expedientes)) throw new Error("El archivo no es de la Agenda RT");
         const recibidos = new Set(p.aplicados || []);           // uids que la computadora ya registró
         D.cola = D.cola.filter(c => !recibidos.has(c.uid));
@@ -315,7 +381,7 @@ function ir(k) {
 // ── eventos ────────────────────────────────────────────
 const personal = e => !e.expediente_id && D.categorias && D.categorias.categorias["Personal / otro"].includes(e.tipo) && !D.categorias.categorias["Asunto del despacho"].includes(e.tipo);
 function tarjetaEvento(e, clase) {
-  const k = e.id ? "i" + e.id : "u" + e.uid;
+  const k = esc(e.id ? "i" + e.id : "u" + e.uid);
   return `<div class="tarjeta ${clase||""} ${personal(e)?"pers":""}">
     <div class="fila" style="justify-content:space-between"><div style="flex:1;min-width:0">
       <div class="t1">${esc(e.titulo)}${e.pendiente_sync ? ' <span class="chip c">sin sincronizar</span>' : ""}</div>
@@ -405,7 +471,7 @@ function buscarExp(q) {
 function formEvento(fecha, expPre) {
   const C = D.categorias; let cat = "Asunto del despacho", exp = expPre || null;
   const h = hoja(`<div class="hojacab"><h2 style="margin:0">Nuevo evento</h2><button class="x">×</button></div>
-    <label>Categoría</label><div class="seg" id="fcat">${Object.keys(C.categorias).map(c => `<button data-c="${c}">${c}</button>`).join("")}</div>
+    <label>Categoría</label><div class="seg" id="fcat">${Object.keys(C.categorias).map(c => `<button data-c="${esc(c)}">${esc(c)}</button>`).join("")}</div>
     <label>Tipo</label><select id="ftipo"></select>
     <label>Título *</label><input id="ftit" placeholder="Ej. Audiencia de pruebas">
     <div class="fila"><div style="flex:2"><label>Fecha *</label><input id="ffec" type="date" value="${fecha}"></div>
@@ -422,7 +488,7 @@ function formEvento(fecha, expPre) {
     h.querySelectorAll("#frec button").forEach(b => b.classList.toggle("on", d.includes(b.dataset.m))); };
   const pintarCat = () => {
     h.querySelectorAll("#fcat button").forEach(b => b.classList.toggle("on", b.dataset.c === cat));
-    const t = $("#ftipo", h).value; $("#ftipo", h).innerHTML = C.categorias[cat].map(x => `<option ${x===t?"selected":""}>${x}</option>`).join("");
+    const t = $("#ftipo", h).value; $("#ftipo", h).innerHTML = C.categorias[cat].map(x => `<option ${x===t?"selected":""}>${esc(x)}</option>`).join("");
     const desp = cat === "Asunto del despacho";
     $("#fexpw", h).style.display = desp ? "" : "none"; $("#flugl", h).textContent = desp ? "Juzgado / lugar" : "Lugar";
     $("#fexpl", h).textContent = desp && C.requiere.includes($("#ftipo", h).value) ? "Expediente *" : "Expediente (opcional)";
@@ -434,7 +500,7 @@ function formEvento(fecha, expPre) {
   $("#fexp", h).oninput = () => {
     exp = null; const q = $("#fexp", h).value.trim(); if (q.length < 2) return $("#fexpr", h).innerHTML = "";
     const r = buscarExp(q).slice(0, 8);
-    $("#fexpr", h).innerHTML = r.map(e => `<div class="tarjeta" data-e="${e.id}" style="padding:8px 12px">
+    $("#fexpr", h).innerHTML = r.map(e => `<div class="tarjeta" data-e="${esc(e.id)}" style="padding:8px 12px">
       <b>${esc(numExp(e))}</b> · ${esc(e.actor)} vs ${esc(e.demandada)}<div class="t2">${esc(e.juzgado)}</div></div>`).join("") || `<div class="t2">Sin coincidencias</div>`;
     h.querySelectorAll("[data-e]").forEach(d => d.onclick = () => { exp = D.expedientes.find(x => x.id == d.dataset.e);
       $("#fexp", h).value = `${numExp(exp)} · ${exp.actor} vs ${exp.demandada}`; $("#fexpr", h).innerHTML = "";
