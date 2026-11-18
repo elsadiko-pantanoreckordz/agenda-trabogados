@@ -20,8 +20,13 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      # El runner de GitHub ya trae el SDK de Android con las licencias aceptadas;
+      # solo se asegura la plataforma y las build-tools que pide el proyecto.
       - name: Preparar SDK de Android
-        uses: android-actions/setup-android@v3
+        run: |
+          set -eu
+          SDK="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" --install "platforms;android-35" "build-tools;35.0.0"
 
       - name: Compilar APK de depuración
         working-directory: android
