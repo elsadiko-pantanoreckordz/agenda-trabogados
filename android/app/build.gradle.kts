@@ -37,6 +37,10 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
 
+    // AGP 8 no genera BuildConfig por defecto; se usa para activar la depuración
+    // remota del WebView solo en compilaciones debug.
+    buildFeatures { buildConfig = true }
+
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
 }
 
