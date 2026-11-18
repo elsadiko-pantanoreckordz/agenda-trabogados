@@ -1,0 +1,35 @@
+name: APK Android (Agenda RT)
+
+on:
+  push:
+    paths: ["android/**", ".github/workflows/android.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Preparar Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Preparar SDK de Android
+        uses: android-actions/setup-android@v3
+
+      - name: Compilar APK de depuración
+        working-directory: android
+        run: ./gradlew --no-daemon assembleDebug
+
+      - name: Publicar el APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: agenda-rt-android-debug
+          path: android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
