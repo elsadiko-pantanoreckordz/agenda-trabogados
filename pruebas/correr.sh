@@ -31,6 +31,14 @@ paso "Circuito de acuerdos (computadora cifra, la agenda abre)" sh -c '
   python3 "$1/monitor/cli.py" exportar -s "$2/acuerdos.json" >/dev/null
   node "$1/pruebas/acuerdos_circuito.js" "$2/acuerdos.json"
 ' sh "$RAIZ" "$TMP"
+paso "Acuerdo → propuesta de evento aceptada por la agenda" sh -c '
+  set -eu
+  export AGENDA_CLAVE_SYNC="clave-de-sincronizacion-del-despacho"
+  export MONITOR_DB="$2/monitor2.db"
+  python3 "$1/monitor/cli.py" demo >/dev/null
+  python3 "$1/monitor/cli.py" proponer -s "$2/propuestas.json" >/dev/null
+  node "$1/pruebas/acuerdos_propuestas.js" "$2/propuestas.json"
+' sh "$RAIZ" "$TMP"
 if command -v ruff >/dev/null 2>&1; then
   paso "Revisión de código con ruff" ruff check "$RAIZ/monitor" "$RAIZ/pruebas/monitor_acuerdos.py"
 else

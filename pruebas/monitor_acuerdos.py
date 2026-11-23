@@ -144,6 +144,77 @@ def pruebas_seguridad(carpeta: Path) -> None:
         probar(f"no toca la tabla «{ajena}» de la agenda", ajena in tablas, False)
 
 
+def pruebas_analisis() -> None:
+    """De acuerdo a propuesta de evento. Sin modelo: solo reglas verificables."""
+    print("\n── Acuerdo → propuesta de evento ──")
+    import analisis
+
+    inhabiles = {date(2026, 11, 24)}
+    base = {"fuente": "sonora", "clave": "k", "expediente": "452/2026",
+            "fecha_acuerdo": "2026-11-20", "juzgado": "Juzgado X", "sintesis": "", "texto": ""}
+
+    # Plazo en letras, días hábiles. 20-nov-2026 es viernes; con el 24 inhábil,
+    # tres hábiles caen el jueves 26.
+    p = analisis.propuesta_de_acuerdo(
+        dict(base, sintesis="Se da vista por el termino de tres dias habiles"), inhabiles)
+    probar("plazo en letras y hábiles", (p["evento"]["tipo"], p["evento"]["fecha"]),
+           ("Vencimiento", "2026-11-26"))
+    probar("trae el conteo día por día", len(p["conteo"]) >= 5, True)
+    probar("avisa de la fecha desde la que contó",
+           any("surtió efectos" in c for c in p["conteo"]), True)
+
+    # Plazo en dígitos y naturales.
+    p = analisis.propuesta_de_acuerdo(
+        dict(base, sintesis="Se concede plazo de 5 dias naturales para alegatos"), inhabiles)
+    probar("plazo en dígitos y naturales", p["evento"]["fecha"], "2026-11-25")
+
+    # Sin decir si son hábiles o naturales: NO se adivina.
+    p = analisis.propuesta_de_acuerdo(
+        dict(base, sintesis="Se concede el termino de tres dias para contestar"), inhabiles)
+    probar("plazo ambiguo no inventa vencimiento", p["evento"]["tipo"], "Tarea")
+    probar("y explica por qué", "no dice" in p["explicacion"], True)
+
+    # Audiencia con fecha y hora en letras.
+    p = analisis.propuesta_de_acuerdo(
+        dict(base, sintesis="Se senalan las nueve treinta horas del dia diez de diciembre de dos mil veintiseis "
+                            "para la audiencia de pruebas"), inhabiles)
+    probar("audiencia en letras", (p["evento"]["tipo"], p["evento"]["fecha"], p["evento"]["hora"]),
+           ("Audiencia", "2026-12-10", "09:30"))
+    probar("la audiencia no se presenta como plazo contado",
+           any("no es un plazo contado" in c.lower() for c in p["conteo"]), True)
+
+    # Audiencia con fecha y hora en dígitos.
+    p = analisis.propuesta_de_acuerdo(
+        dict(base, sintesis="Se fija audiencia para el 15/12/2026 a las 11:00 horas"), inhabiles)
+    probar("audiencia en dígitos", (p["evento"]["fecha"], p["evento"]["hora"]), ("2026-12-15", "11:00"))
+
+    # Fundamento: solo si aparece literalmente.
+    p = analisis.propuesta_de_acuerdo(
+        dict(base, sintesis="Se da vista por termino de tres dias habiles, con fundamento en el articulo 273 del codigo"), inhabiles)
+    probar("cita el artículo que sí aparece", p["fundamento"].startswith("articulo 273"), True)
+    p = analisis.propuesta_de_acuerdo(
+        dict(base, sintesis="Se da vista por termino de tres dias habiles"), inhabiles)
+    probar("no inventa fundamento cuando no hay", p["fundamento"], "")
+
+    # Lo que NO debe proponer.
+    for sintesis, motivo in [
+        ("Se tiene por presentado el escrito y se agrega a los autos", "trámite sin plazo"),
+        ("", "acuerdo vacío"),
+    ]:
+        probar(f"no propone nada ante {motivo}",
+               analisis.propuesta_de_acuerdo(dict(base, sintesis=sintesis), inhabiles), None)
+    probar("sin fecha de acuerdo no propone",
+           analisis.propuesta_de_acuerdo(dict(base, fecha_acuerdo="", sintesis="termino de tres dias habiles")), None)
+    probar("plazo absurdo no propone vencimiento",
+           analisis.propuesta_de_acuerdo(dict(base, sintesis="termino de 900 dias habiles"), inhabiles), None)
+
+    # Un acuerdo que pide algo pero no dice cuándo: solo si tú lo pides.
+    accionable = dict(base, sintesis="Se requiere a la parte para que exhiba el documento")
+    probar("por omisión se calla", analisis.propuesta_de_acuerdo(accionable, inhabiles), None)
+    p = analisis.propuesta_de_acuerdo(accionable, inhabiles, sin_plazo=True)
+    probar("con --sin-plazo propone revisar", p["evento"]["tipo"], "Tarea")
+
+
 def pruebas_cli(carpeta: Path) -> None:
     print("\n── Línea de comandos ──")
     base = str(carpeta / "cli.db")
@@ -161,6 +232,7 @@ def main() -> int:
         pruebas_almacen(carpeta)
         pruebas_huella(carpeta)
         pruebas_seguridad(carpeta)
+        pruebas_analisis()
         pruebas_cli(carpeta)
     print()
     print("Todo en orden." if not FALLAS else f"{FALLAS} prueba(s) fallaron.")

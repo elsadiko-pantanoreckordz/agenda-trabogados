@@ -32,8 +32,37 @@ ninguna de las tablas de la agenda.
 
 | `exportar.py` | Arma el archivo cifrado de acuerdos que recibe la tablet |
 
+| `analisis.py` | Lee el acuerdo y propone el evento: plazos, audiencias y clasificación |
+
 **Falta** (etapas siguientes): los conectores reales, el OCR y la revisión diaria
 automática.
+
+## Qué hay hecho (etapa f): del acuerdo al evento
+
+```sh
+python3 monitor/cli.py proponer --ver
+python3 monitor/cli.py proponer -s propuestas.json
+```
+- **Para qué sirve:** convierte los acuerdos en propuestas de evento, que apruebas en la tablet.
+- **Opciones:** `--ver` → solo las muestra, no genera archivo ni pide clave; `-s ARCHIVO` → dónde escribirlas; `--vigilados` → solo expedientes en vigilancia; `--sin-plazo` → también propone revisar acuerdos que piden algo pero no señalan plazo; `--limite` → cuántos acuerdos revisar.
+- **Efectos:** con `--ver` solo lee. Sin `--ver`, pide la clave de sincronización y escribe el archivo cifrado. No modifica la agenda ni la base del monitor. Reversible: borra el archivo.
+
+**Sin modelo de lenguaje, a propósito.** Reconocer «tres días hábiles» o «las nueve
+treinta horas del diez de diciembre» es reconocer patrones, y los patrones se
+prueban uno por uno. Un modelo aquí añadiría costo, red y la posibilidad de
+inventar, sin ganar nada. Las propuestas salen en el mismo formato que ya valida
+la agenda, así que entran por el camino de siempre: tú apruebas o descartas.
+
+### Tres reglas que el análisis no rompe
+
+1. **Si el acuerdo no dice si los días son hábiles o naturales, no se adivina.**
+   Se propone una tarea para revisar el plazo, nunca una fecha de vencimiento
+   inventada. Hay una prueba que lo verifica.
+2. **El fundamento solo se cita si aparece literalmente** en el acuerdo. Si no
+   aparece, el campo va vacío.
+3. **La fecha límite la calcula `plazos.py`** y viaja con el conteo día por día,
+   incluido el aviso de que se contó desde la fecha del acuerdo: si la
+   notificación surtió efectos otro día, lo corriges al aprobar.
 
 ## Qué hay hecho (etapa b)
 

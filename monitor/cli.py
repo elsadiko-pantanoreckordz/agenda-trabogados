@@ -125,14 +125,72 @@ def cmd_exportar(args) -> int:
         print("La clave debe tener al menos 10 caracteres", file=sys.stderr)
         return 1
     con = almacen.abrir(ruta_base(args))
+    from datetime import datetime as _dt
     destino = Path(args.salida) if args.salida else Path(
-        f"acuerdos_{__import__('datetime').datetime.now():%Y%m%d%H%M}.json")
+        f"acuerdos_{_dt.now().astimezone():%Y%m%d%H%M}.json")
     cuantos, ruta = exportador.exportar(con, clave, destino, solo_nuevos=not args.todos)
     if not cuantos:
         print("No hay acuerdos nuevos que mandar.")
         return 0
     print(f"{cuantos} acuerdo(s) cifrados en: {ruta}")
     print("Pásalo a la tablet y recíbelo en «⟳ Compartir datos → Recibir datos».")
+    return 0
+
+
+def cmd_proponer(args) -> int:
+    """Convierte acuerdos en propuestas de evento para aprobar en la tablet."""
+    import getpass
+    import json as _json
+    from datetime import date, datetime
+
+    import analisis
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "agente"))
+    from cripto import cifrar
+
+    # Días inhábiles: los mismos que usa el asistente, mantenidos por el despacho.
+    ruta_inh = Path(__file__).resolve().parent.parent / "agente" / "dias_inhabiles.json"
+    inhabiles = set()
+    if ruta_inh.is_file():
+        bruto = _json.loads(ruta_inh.read_text(encoding="utf-8"))
+        for f in (bruto.get("dias", []) if isinstance(bruto, dict) else bruto):
+            try:
+                inhabiles.add(date.fromisoformat(str(f)[:10]))
+            except ValueError:
+                pass
+    if not inhabiles:
+        print("AVISO: no hay días inhábiles registrados en agente/dias_inhabiles.json.\n"
+              "       Los plazos solo descontarán sábados y domingos.")
+
+    con = almacen.abrir(ruta_base(args))
+    filas = almacen.buscar(con, solo_vigilados=args.vigilados, limite=args.limite)
+    propuestas = []
+    for f in filas:
+        p = analisis.propuesta_de_acuerdo(dict(f), inhabiles, sin_plazo=args.sin_plazo)
+        if p:
+            propuestas.append(p)
+    if not propuestas:
+        print("Ningún acuerdo abre plazo ni señala fecha. Nada que proponer.")
+        return 0
+
+    if args.ver:
+        for p in propuestas:
+            e = p["evento"]
+            print(f"{e['tipo']:12} {e['fecha']} {e['hora'] or '     '}  {p['resumen']}")
+        return 0
+
+    clave = os.environ.get("AGENDA_CLAVE_SYNC") or getpass.getpass("Clave de sincronización: ")
+    if len(clave) < 10:
+        print("La clave debe tener al menos 10 caracteres", file=sys.stderr)
+        return 1
+    destino = Path(args.salida) if args.salida else Path(f"propuestas_{datetime.now().astimezone():%Y%m%d%H%M}.json")
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    destino.write_text(_json.dumps(cifrar(
+        {"formato": "agenda-rt-propuestas", "version": 1,
+         "generado": datetime.now().astimezone().isoformat(timespec="seconds"),
+         "propuestas": propuestas, "peticiones_atendidas": []},
+        clave, "propuestas"), ensure_ascii=False), encoding="utf-8")
+    print(f"{len(propuestas)} propuesta(s) cifradas en: {destino}")
+    print("Recíbelas en la tablet con «⟳ Compartir datos → Recibir datos» y apruébalas en «Asistente».")
     return 0
 
 
@@ -172,6 +230,15 @@ def main(argv: list[str] | None = None) -> int:
 
     d = sub.add_parser("demo", help="carga acuerdos de ejemplo")
     d.set_defaults(func=cmd_demo)
+
+    pr = sub.add_parser("proponer", help="convierte acuerdos en propuestas de evento")
+    pr.add_argument("-s", "--salida", help="archivo a generar")
+    pr.add_argument("--vigilados", action="store_true", help="solo expedientes en vigilancia")
+    pr.add_argument("--sin-plazo", action="store_true",
+                    help="también propone revisar acuerdos accionables que no señalan plazo")
+    pr.add_argument("--ver", action="store_true", help="solo muestra, no genera archivo")
+    pr.add_argument("--limite", type=int, default=almacen.LIMITE_PREDETERMINADO)
+    pr.set_defaults(func=cmd_proponer)
 
     x = sub.add_parser("exportar", help="genera el archivo cifrado para la tablet")
     x.add_argument("-s", "--salida", help="archivo a generar")
