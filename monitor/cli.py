@@ -114,6 +114,28 @@ def cmd_demo(args) -> int:
     return 0
 
 
+def cmd_exportar(args) -> int:
+    """Genera el archivo cifrado de acuerdos para la tablet."""
+    import getpass
+
+    import exportar as exportador
+
+    clave = os.environ.get("AGENDA_CLAVE_SYNC") or getpass.getpass("Clave de sincronización: ")
+    if len(clave) < 10:
+        print("La clave debe tener al menos 10 caracteres", file=sys.stderr)
+        return 1
+    con = almacen.abrir(ruta_base(args))
+    destino = Path(args.salida) if args.salida else Path(
+        f"acuerdos_{__import__('datetime').datetime.now():%Y%m%d%H%M}.json")
+    cuantos, ruta = exportador.exportar(con, clave, destino, solo_nuevos=not args.todos)
+    if not cuantos:
+        print("No hay acuerdos nuevos que mandar.")
+        return 0
+    print(f"{cuantos} acuerdo(s) cifrados en: {ruta}")
+    print("Pásalo a la tablet y recíbelo en «⟳ Compartir datos → Recibir datos».")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="monitor.cli", description="Monitor de Acuerdos de la Agenda RT")
     ap.add_argument("--base", help="archivo de base de datos (por defecto monitor/datos/acuerdos.db)")
@@ -150,6 +172,11 @@ def main(argv: list[str] | None = None) -> int:
 
     d = sub.add_parser("demo", help="carga acuerdos de ejemplo")
     d.set_defaults(func=cmd_demo)
+
+    x = sub.add_parser("exportar", help="genera el archivo cifrado para la tablet")
+    x.add_argument("-s", "--salida", help="archivo a generar")
+    x.add_argument("--todos", action="store_true", help="manda también los ya enviados")
+    x.set_defaults(func=cmd_exportar)
 
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO if args.verboso else logging.WARNING,

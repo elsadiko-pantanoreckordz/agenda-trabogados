@@ -22,6 +22,15 @@ paso "Cifrado: la tablet cifra, la computadora abre" sh -c "cd '$RAIZ' && node p
 paso "Circuito del asistente (modelo simulado)" python3 "$RAIZ/pruebas/circuito.py" "$TMP"
 paso "La agenda acepta y valida las propuestas" node "$RAIZ/pruebas/acepta.js" "$TMP"
 paso "Monitor de Acuerdos (normalización, almacén, seguridad)" python3 "$RAIZ/pruebas/monitor_acuerdos.py"
+paso "Pestaña Acuerdos: paridad con la computadora y búsqueda" node "$RAIZ/pruebas/acuerdos.test.js"
+paso "Circuito de acuerdos (computadora cifra, la agenda abre)" sh -c '
+  set -eu
+  export AGENDA_CLAVE_SYNC="clave-de-sincronizacion-del-despacho"
+  export MONITOR_DB="$2/monitor.db"
+  python3 "$1/monitor/cli.py" demo >/dev/null
+  python3 "$1/monitor/cli.py" exportar -s "$2/acuerdos.json" >/dev/null
+  node "$1/pruebas/acuerdos_circuito.js" "$2/acuerdos.json"
+' sh "$RAIZ" "$TMP"
 if command -v ruff >/dev/null 2>&1; then
   paso "Revisión de código con ruff" ruff check "$RAIZ/monitor" "$RAIZ/pruebas/monitor_acuerdos.py"
 else

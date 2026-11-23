@@ -30,8 +30,31 @@ ninguna de las tablas de la agenda.
 | `cli.py` | Búsqueda y vigilancia por línea de comandos |
 | `ejemplos/` | Acuerdos de ejemplo para probar sin conectores |
 
-**Falta** (etapas siguientes): los conectores reales, la pestaña en la agenda,
-los avisos, el OCR y la exportación a la tablet.
+| `exportar.py` | Arma el archivo cifrado de acuerdos que recibe la tablet |
+
+**Falta** (etapas siguientes): los conectores reales, el OCR y la revisión diaria
+automática.
+
+## Qué hay hecho (etapa b)
+
+La agenda tiene una pestaña **Acuerdos**: busca por palabras, expediente, juzgado,
+materia, parte y fechas; marca expedientes como vigilados; avisa en «Mi día» de
+los acuerdos sin revisar; y desde un acuerdo abre el formulario de evento ya
+lleno, para que tú lo confirmes.
+
+⚠ **La normalización de expedientes está escrita dos veces**, una en Python para
+la computadora y otra en JavaScript para la tablet, porque son dos programas
+distintos. Si las dos no coinciden, los acuerdos no empatarían con tus
+expedientes. Por eso las dos leen la misma tabla de casos
+(`pruebas/casos_expedientes.json`) y hay una prueba por lado: si alguien cambia
+una y no la otra, las pruebas fallan.
+
+```sh
+python3 monitor/cli.py exportar
+```
+- **Para qué sirve:** genera el archivo cifrado con los acuerdos que la tablet todavía no tiene.
+- **Opciones:** `-s ARCHIVO` → dónde escribirlo; `--todos` → manda también los ya enviados.
+- **Efectos:** pide la clave de sincronización (o la toma de `AGENDA_CLAVE_SYNC`), escribe el archivo cifrado y marca esos acuerdos como enviados en la base del monitor. No toca la agenda. Reversible: vuelve a exportar con `--todos`.
 
 ## Comandos
 

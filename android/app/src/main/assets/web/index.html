@@ -109,7 +109,7 @@ const DB = { db: null,
   poner(k, v) { return new Promise((ok, mal) => { const t = this.db.transaction("kv", "readwrite");
     t.objectStore("kv").put(v, k); t.oncomplete = ok; t.onerror = () => mal(t.error); }); },
 };
-let D = { eventos: [], expedientes: [], tribunales: [], categorias: null, meta: {}, cola: [], peticiones: [], propuestas: [] };
+let D = { eventos: [], expedientes: [], tribunales: [], categorias: null, meta: {}, cola: [], peticiones: [], propuestas: [], acuerdos: [], vigilados: [] };
 let SES = null;      // {token, usuario}
 // En GitHub Pages (https) no hay computadora: la app trabaja sola y se sincroniza por archivo.
 const HAY_PC = false;   // App de Android: base de datos propia, sin servidor.
@@ -291,7 +291,7 @@ function bajar(nombre, obj) {
   const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([texto], {type: "application/json"}));
   a.download = nombre; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
 }
-const CLAVES_D = ["eventos", "expedientes", "tribunales", "categorias", "meta", "cola", "peticiones", "propuestas"];
+const CLAVES_D = ["eventos", "expedientes", "tribunales", "categorias", "meta", "cola", "peticiones", "propuestas", "acuerdos", "vigilados"];
 function panelArchivo() {
   const f = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "");
   const v = hoja(`<div class="hojacab"><h2 style="margin:0">Compartir datos (opcional)</h2><button class="x">×</button></div>
@@ -315,7 +315,7 @@ function panelArchivo() {
     const clave = await pedirClave(); if (!clave) return;
     try {
       bajar(`pendientes_${f}.json`, await cifrarSync({formato: "agenda-rt-peticiones", version: 1, generado: new Date().toISOString(),
-        usuario: SES.usuario, peticiones: D.peticiones}, clave, "pendientes"));
+        usuario: SES.usuario, peticiones: D.peticiones, vigilados: D.vigilados || []}, clave, "pendientes"));
       aviso("Archivo cifrado generado. Los pendientes se quedan en la charola hasta que recibas las propuestas.");
     } catch(e) { aviso(e.message, 1); } };
   $("#sr").onclick = async () => { const clave = await pedirClave(); if (!clave) return;
@@ -328,11 +328,45 @@ function panelArchivo() {
       if (archivo.size > 50 * 1024 * 1024) throw new Error("El archivo es demasiado grande");
       let p = JSON.parse(await archivo.text());
       if (p && p.formato === "agenda-rt-cifrado") {
-        if (!["datos_agenda", "respaldo_tablet", "propuestas"].includes(p.contenido)) throw new Error("Este archivo no es para recibir en la tablet");
+        if (!["datos_agenda", "respaldo_tablet", "propuestas", "acuerdos"].includes(p.contenido)) throw new Error("Este archivo no es para recibir en la tablet");
         const clave = await pedirClave(); if (!clave) return;
         aviso("Descifrando…");
         p = await descifrarSync(p, clave, p.contenido);
       } else if (!confirmarEn("Este archivo NO está cifrado: no se puede comprobar que venga de tu computadora. ¿Usarlo de todos modos?")) return;
+      if (p.formato === "agenda-rt-acuerdos") {
+        if (!Array.isArray(p.acuerdos)) throw new Error("El archivo de acuerdos viene dañado");
+        if (p.acuerdos.length > 5000) throw new Error("El archivo trae demasiados acuerdos");
+        // Lo que llega son datos, no instrucciones: cada campo se recorta y se
+        // guarda como texto. Nada de lo que venga aquí entra solo a la agenda.
+        const texto = (x, max) => String(x ?? "").slice(0, max);
+        const porLlave = new Map((D.acuerdos || []).map(a => [a.uid, a]));
+        let nuevos = 0;
+        for (const x of p.acuerdos) {
+          if (!x || typeof x !== "object") continue;
+          const uid = texto(x.huella || x.uid || x.clave, 80);
+          if (!uid) continue;
+          const previo = porLlave.get(uid);
+          const limpio = {
+            uid, fuente: texto(x.fuente, 40), clave: texto(x.clave, 120),
+            expediente: expCanonico(x.expediente || x.expediente_crudo),
+            expediente_crudo: texto(x.expediente_crudo || x.expediente, 60),
+            juzgado: texto(x.juzgado, 200), distrito: texto(x.distrito, 80),
+            materia: texto(x.materia, 60), jurisdiccion: texto(x.jurisdiccion, 40),
+            partes: texto(x.partes, 400),
+            fecha_acuerdo: /^\d{4}-\d{2}-\d{2}$/.test(x.fecha_acuerdo || "") ? x.fecha_acuerdo : "",
+            fecha_publicacion: /^\d{4}-\d{2}-\d{2}$/.test(x.fecha_publicacion || "") ? x.fecha_publicacion : "",
+            sintesis: texto(x.sintesis, 1000), texto: texto(x.texto, 20000),
+            url_documento: /^https:\/\//.test(x.url_documento || "") ? texto(x.url_documento, 500) : "",
+            nuevo: previo ? previo.nuevo : true,
+          };
+          if (previo) Object.assign(previo, limpio);
+          else { D.acuerdos.push(limpio); porLlave.set(uid, limpio); nuevos++; }
+        }
+        D.acuerdos.sort((a, b) => String(b.fecha_acuerdo || "").localeCompare(String(a.fecha_acuerdo || "")));
+        await guardar("acuerdos");
+        v.remove(); ir("acu");
+        return aviso(`${nuevos} acuerdo(s) nuevos · ${D.acuerdos.length} en total`);
+      }
       if (p.formato === "agenda-rt-propuestas") {
         if (!Array.isArray(p.propuestas)) throw new Error("El archivo del asistente viene dañado");
         if (p.propuestas.length > 500) throw new Error("El archivo trae demasiadas propuestas");
@@ -446,7 +480,17 @@ function riesgos() {
      if (!hay) av.push({n: 2, t: `${largo(e.fecha)}: vence «${e.titulo}» y no hay promoción capturada para ese expediente.`});
    });
 
-  // 4. Expedientes sin un solo movimiento (pasado o futuro) en los últimos 60 días.
+  // 4. Acuerdos recibidos que todavía no revisas, en expedientes que vigilas.
+  const sinRevisar = (D.acuerdos || []).filter(a => a.nuevo);
+  if (sinRevisar.length) {
+    const vig = new Set(D.vigilados || []);
+    const propios = sinRevisar.filter(a => vig.has(a.expediente));
+    av.push(propios.length
+      ? {n: 2, t: `${propios.length} acuerdo(s) nuevos en expedientes que vigilas. Revísalos en «Acuerdos».`}
+      : {n: 1, t: `${sinRevisar.length} acuerdo(s) nuevos por revisar en «Acuerdos».`});
+  }
+
+  // 5. Expedientes sin un solo movimiento (pasado o futuro) en los últimos 60 días.
   if (D.expedientes.length) {
     const corte = masDias(-60);
     const conMov = new Set(D.eventos.filter(e => e.fecha >= corte).map(e => e.expediente_id).filter(Boolean));
@@ -462,6 +506,181 @@ function panelRiesgos() {
     r.map(x => `<div class="tarjeta" style="border-left:4px solid ${color(x.n)}">${esc(x.t)}</div>`).join("");
 }
 const ordenar = l => l.slice().sort((a, b) => (a.fecha + (a.hora || "99")).localeCompare(b.fecha + (b.hora || "99")));
+
+// ── acuerdos: normalización de expedientes ────────────
+// Esto tiene que dar EXACTAMENTE el mismo resultado que monitor/expedientes.py
+// en la computadora; si no, los acuerdos no empatarían con tus expedientes.
+// La tabla de casos que lo comprueba es pruebas/casos_expedientes.json.
+const EXP_ROMANO = "(?:I{1,3}|IV|V|VI{1,3}|IX|X{1,2})";
+const EXP_PATRON = new RegExp(
+  "(\\d{1,6})\\s*[/-]\\s*(\\d{2}|\\d{4})(?!\\s*[/-]?\\s*\\d)" +
+  "(?:\\s*[-/]\\s*(" + EXP_ROMANO + "|BIS|TER|[A-Z])|\\s+(" + EXP_ROMANO + "|BIS|TER))?(?![A-Z0-9])", "g");
+const EXP_ANIO_MIN = 1900, EXP_NUM_MAX = 999999;
+
+function expAnio(crudo, hoy) {
+  const n = Number(crudo), tope = (hoy || new Date()).getFullYear();
+  if (crudo.length === 4) return (n >= EXP_ANIO_MIN && n <= tope + 1) ? n : null;
+  let c = 2000 + n;
+  if (c > tope + 1) c = 1900 + n;
+  return (c >= EXP_ANIO_MIN && c <= tope + 1) ? c : null;
+}
+function expExtraer(texto, hoy) {
+  if (!texto) return [];
+  const limpio = sa(texto).toUpperCase(), salida = [], vistos = new Set();
+  EXP_PATRON.lastIndex = 0;
+  let m;
+  while ((m = EXP_PATRON.exec(limpio)) !== null) {
+    // En vez de mirar hacia atrás con la expresión (que no todos los navegadores
+    // antiguos soportan), se revisa a mano el carácter anterior.
+    const antes = m.index > 0 ? limpio[m.index - 1] : "";
+    if (antes && /[\d/-]/.test(antes)) continue;
+    const num = Number(m[1]), anio = expAnio(m[2], hoy);
+    if (anio === null || !(num >= 1 && num <= EXP_NUM_MAX)) continue;
+    const suf = (m[3] || m[4] || "").toUpperCase();
+    const llave = num + "/" + anio + "-" + suf;
+    if (vistos.has(llave)) continue;
+    vistos.add(llave);
+    salida.push({numero: num, anio, sufijo: suf, canonico: `${num}/${anio}`,
+                 completo: suf ? `${num}/${anio}-${suf}` : `${num}/${anio}`});
+  }
+  return salida;
+}
+const expNormalizar = (texto, hoy) => expExtraer(texto, hoy)[0] || null;
+const expCanonico = (texto, hoy) => { const e = expNormalizar(texto, hoy); return e ? e.canonico : ""; };
+
+// ── acuerdos: búsqueda local ───────────────────────────
+// Todo se busca en el dispositivo, sobre lo que ya recibiste. Sin red.
+let ACU = {texto: "", expediente: "", juzgado: "", materia: "", jurisdiccion: "", parte: "",
+           desde: "", hasta: "", nuevos: false, vigilados: false, filtros: false};
+
+function buscarAcuerdos(f) {
+  const lista = D.acuerdos || [];
+  const escrito = String(f.texto || "").trim();
+  const palabras = sa(escrito).split(/\s+/).filter(x => x.length >= 2);
+  // Igual que en la computadora: si escribiste algo que no deja ninguna palabra
+  // buscable, el resultado es NADA, nunca la lista completa.
+  if (escrito && !palabras.length) return [];
+  const canon = expCanonico(f.expediente || "");
+  const vig = new Set(D.vigilados || []);
+
+  return lista.filter(a => {
+    if (f.nuevos && !a.nuevo) return false;
+    if (f.vigilados && !vig.has(a.expediente)) return false;
+    if (f.expediente) {
+      if (canon) { if (a.expediente !== canon) return false; }
+      else if (!sa(a.expediente_crudo || a.expediente).includes(sa(f.expediente))) return false;
+    }
+    for (const [campo, valor] of [["juzgado", f.juzgado], ["materia", f.materia],
+                                  ["jurisdiccion", f.jurisdiccion], ["partes", f.parte]])
+      if (valor && !sa(a[campo] || "").includes(sa(valor))) return false;
+    if (f.desde && (a.fecha_acuerdo || "") < f.desde) return false;
+    if (f.hasta && (a.fecha_acuerdo || "") > f.hasta) return false;
+    if (palabras.length) {
+      const todo = sa([a.expediente, a.expediente_crudo, a.juzgado, a.partes, a.sintesis, a.texto].join(" "));
+      if (!palabras.every(x => todo.includes(x))) return false;
+    }
+    return true;
+  }).sort((a, b) => String(b.fecha_acuerdo || "").localeCompare(String(a.fecha_acuerdo || "")));
+}
+
+async function alternarVigilancia(canon) {
+  if (!canon) return aviso("Ese acuerdo no trae número de expediente", 1);
+  const v = D.vigilados || (D.vigilados = []);
+  const i = v.indexOf(canon);
+  if (i >= 0) { v.splice(i, 1); aviso(`Ya no se vigila ${canon}`); }
+  else { v.push(canon); aviso(`Se vigilará ${canon} · avísale a la computadora al compartir datos`); }
+  await guardar("vigilados");
+}
+
+function tarjetaAcuerdo(a) {
+  const vig = (D.vigilados || []).includes(a.expediente);
+  return `<div class="tarjeta ${a.nuevo ? "hoy" : ""}" data-ac="${esc(a.uid || a.clave)}">
+    <div class="fila" style="justify-content:space-between;gap:8px">
+      <div style="flex:1;min-width:0">
+        <div class="t1">${esc(a.expediente || a.expediente_crudo || "Sin número")}${a.nuevo ? ' <span class="chip c">nuevo</span>' : ""}${vig ? ' <span class="chip">vigilado</span>' : ""}</div>
+        <div class="t2">${esc(a.fecha_acuerdo || "sin fecha")}${a.materia ? " · " + esc(a.materia) : ""}${a.juzgado ? " · " + esc(a.juzgado) : ""}</div>
+        <div class="t2" style="margin-top:4px">${esc((a.sintesis || "").slice(0, 160))}</div>
+      </div></div></div>`;
+}
+
+function verAcuerdos() {
+  const r = buscarAcuerdos(ACU), total = (D.acuerdos || []).length;
+  const nuevos = (D.acuerdos || []).filter(a => a.nuevo).length;
+  const campo = (id, et, val, tipo) => `<div style="flex:1;min-width:120px"><label>${et}</label><input id="${id}" type="${tipo || "text"}" value="${esc(val || "")}"></div>`;
+
+  $("#main").innerHTML = `<h2>Acuerdos</h2>
+    <div class="t2">${total ? `${total} acuerdo(s) recibidos${nuevos ? `, ${nuevos} sin revisar` : ""}.` :
+      "Todavía no has recibido acuerdos. Los descarga la computadora de los boletines oficiales y llegan en «⟳ Compartir datos»."}</div>
+    <div class="fila" style="margin-top:10px"><input id="aq" style="flex:1" placeholder="Buscar: parte, juzgado, palabras del acuerdo" value="${esc(ACU.texto)}">
+      <button class="btn p" id="ab">Buscar</button></div>
+    <div class="chips" style="margin-top:8px">
+      <button id="af" class="${ACU.filtros ? "on" : ""}">Filtros</button>
+      <button id="an" class="${ACU.nuevos ? "on" : ""}">Solo nuevos</button>
+      <button id="av" class="${ACU.vigilados ? "on" : ""}">Solo vigilados</button>
+      ${ACU.texto || ACU.expediente || ACU.juzgado || ACU.materia || ACU.parte || ACU.desde || ACU.hasta ? `<button id="al">Limpiar</button>` : ""}
+    </div>
+    <div id="afw" style="display:${ACU.filtros ? "block" : "none"};margin-top:8px">
+      <div class="fila">${campo("ae", "Expediente", ACU.expediente)}${campo("am", "Materia", ACU.materia)}</div>
+      <div class="fila">${campo("aj", "Juzgado", ACU.juzgado)}${campo("ap", "Parte", ACU.parte)}</div>
+      <div class="fila">${campo("ad", "Desde", ACU.desde, "date")}${campo("ah", "Hasta", ACU.hasta, "date")}</div>
+    </div>
+    <h3>${r.length} resultado(s)</h3>
+    ${r.length ? r.map(tarjetaAcuerdo).join("") : `<div class="vacio">${total ? "Sin coincidencias con estos filtros." : "Nada que mostrar todavía."}</div>`}`;
+
+  const releer = () => {
+    ACU.texto = $("#aq").value.trim();
+    if (ACU.filtros) {
+      ACU.expediente = $("#ae").value.trim(); ACU.materia = $("#am").value.trim();
+      ACU.juzgado = $("#aj").value.trim(); ACU.parte = $("#ap").value.trim();
+      ACU.desde = $("#ad").value; ACU.hasta = $("#ah").value;
+    }
+    verAcuerdos();
+  };
+  $("#ab").onclick = releer;
+  $("#aq").onkeydown = e => { if (e.key === "Enter") releer(); };
+  $("#af").onclick = () => { ACU.filtros = !ACU.filtros; releer(); };
+  $("#an").onclick = () => { ACU.nuevos = !ACU.nuevos; releer(); };
+  $("#av").onclick = () => { ACU.vigilados = !ACU.vigilados; releer(); };
+  if ($("#al")) $("#al").onclick = () => {
+    ACU = {texto: "", expediente: "", juzgado: "", materia: "", jurisdiccion: "", parte: "",
+           desde: "", hasta: "", nuevos: false, vigilados: false, filtros: ACU.filtros};
+    verAcuerdos();
+  };
+  document.querySelectorAll("[data-ac]").forEach(d => d.onclick = () => {
+    const a = (D.acuerdos || []).find(x => (x.uid || x.clave) === d.dataset.ac);
+    if (a) detalleAcuerdo(a);
+  });
+}
+
+function detalleAcuerdo(a) {
+  const canon = a.expediente || "";
+  const vig = (D.vigilados || []).includes(canon);
+  const exp = canon ? D.expedientes.find(e => numExp(e) === canon) : null;
+  const h = hoja(`<div class="hojacab"><h2 style="margin:0">${esc(canon || a.expediente_crudo || "Acuerdo")}</h2><button class="x">×</button></div>
+    <div class="t2">${esc(a.fecha_acuerdo || "sin fecha")}${a.fecha_publicacion ? " · publicado " + esc(a.fecha_publicacion) : ""}${a.fuente ? " · " + esc(a.fuente) : ""}</div>
+    ${a.juzgado ? `<div class="t2" style="margin-top:6px">🏛 ${esc(a.juzgado)}</div>` : ""}
+    ${a.materia || a.jurisdiccion ? `<div class="fila" style="margin-top:6px"><span class="chip c">${esc(a.materia || "")}</span><span class="chip">${esc(a.jurisdiccion || "")}</span></div>` : ""}
+    ${a.partes ? `<div style="margin-top:8px">${esc(a.partes)}</div>` : ""}
+    ${a.sintesis ? `<div class="tarjeta" style="margin-top:10px">${esc(a.sintesis)}</div>` : ""}
+    ${a.texto ? `<details style="margin-top:8px"><summary class="t2">Ver el texto completo</summary><div class="t2" style="white-space:pre-wrap;margin-top:6px">${esc(a.texto)}</div></details>` : ""}
+    ${exp ? `<div class="t2" style="margin-top:10px">Empata con tu expediente ${esc(numExp(exp))} · ${esc(exp.actor || "")} vs ${esc(exp.demandada || "")}</div>`
+          : canon ? `<div class="t2" style="margin-top:10px;color:var(--gold)">Este expediente no está en tu lista de expedientes.</div>` : ""}
+    <button class="btn p" style="width:100%;margin-top:12px" id="acev">＋ Crear evento desde este acuerdo</button>
+    <button class="btn" style="width:100%;margin-top:8px" id="acvig">${vig ? "Dejar de vigilar" : "Vigilar este expediente"}</button>
+    ${a.url_documento ? `<a class="btn s" style="display:block;text-align:center;margin-top:8px" href="${esc(a.url_documento)}" target="_blank" rel="noopener">↗ Abrir el documento oficial</a>` : ""}
+    <div class="t2" style="margin-top:10px">Lo que ves aquí es informativo y viene del boletín. Verifica en el expediente antes de actuar.</div>`);
+
+  if (a.nuevo) { a.nuevo = false; guardar("acuerdos"); }
+  $("#acvig", h).onclick = async () => { await alternarVigilancia(canon); h.remove(); verAcuerdos(); };
+  $("#acev", h).onclick = () => {
+    h.remove();
+    // Propone, no crea: abre el formulario de siempre con los datos del acuerdo
+    // y tú decides el tipo, la fecha y si se guarda.
+    formEvento(a.fecha_acuerdo && /^\d{4}-\d{2}-\d{2}$/.test(a.fecha_acuerdo) ? a.fecha_acuerdo : iso(new Date()),
+               exp, {titulo: (a.sintesis || "").slice(0, 80),
+                     notas: `Del acuerdo del ${a.fecha_acuerdo || "¿?"} · ${a.fuente || ""}\n${a.sintesis || ""}`});
+  };
+}
 
 // ── asistente: charola de pendientes y propuestas (Modo A) ──
 // El asistente trabaja en la computadora. Aquí solo se guarda lo que le vas a
@@ -597,7 +816,7 @@ function verAsistente() {
 }
 
 // ── estructura ─────────────────────────────────────────
-const SECC = [["midia","☀","Mi día"],["agenda","📅","Agenda"],["exp","📁","Expedientes"],["asis","⚙","Asistente"],["tesis","⚖","Tesis"],["trib","🏛","Tribunales"]];
+const SECC = [["midia","☀","Mi día"],["agenda","📅","Agenda"],["exp","📁","Expedientes"],["acu","§","Acuerdos"],["asis","⚙","Asistente"],["tesis","⚖","Tesis"],["trib","🏛","Tribunales"]];
 let PANT = "midia";
 function iniciar() {
   $("#app").innerHTML = `<header><img src="icono.png" alt=""><div style="flex:1;min-width:0"><h1>Agenda RT</h1>
@@ -613,7 +832,7 @@ function ir(k) {
   PANT = k;
   document.querySelectorAll("nav button").forEach(b => b.classList.toggle("on", b.dataset.k === k));
   document.querySelector(".fab")?.remove();
-  ({midia: verMiDia, agenda: verAgenda, exp: verExpedientes, asis: verAsistente, tesis: verTesis, trib: verTribunales})[k]();
+  ({midia: verMiDia, agenda: verAgenda, exp: verExpedientes, acu: verAcuerdos, asis: verAsistente, tesis: verTesis, trib: verTribunales})[k]();
 }
 
 // ── eventos ────────────────────────────────────────────
@@ -706,19 +925,20 @@ function buscarExp(q) {
   const l = D.expedientes.filter(e => { const b = sa([e.identificador, numExp(e), e.actor, e.demandada, e.juzgado, e.materia, e.tipo_juicio, e.cliente].join(" ")); return t.every(w => b.includes(w)); });
   return l.sort((a, b) => (+b.ano || 0) - (+a.ano || 0) || (+b.num_expediente || 0) - (+a.num_expediente || 0)).slice(0, 80);
 }
-function formEvento(fecha, expPre) {
+function formEvento(fecha, expPre, pre) {
   const C = D.categorias; let cat = "Asunto del despacho", exp = expPre || null;
+  pre = pre || {};
   const h = hoja(`<div class="hojacab"><h2 style="margin:0">Nuevo evento</h2><button class="x">×</button></div>
     <label>Categoría</label><div class="seg" id="fcat">${Object.keys(C.categorias).map(c => `<button data-c="${esc(c)}">${esc(c)}</button>`).join("")}</div>
     <label>Tipo</label><select id="ftipo"></select>
-    <label>Título *</label><input id="ftit" placeholder="Ej. Audiencia de pruebas">
+    <label>Título *</label><input id="ftit" placeholder="Ej. Audiencia de pruebas" value="${esc(pre.titulo || "")}">
     <div class="fila"><div style="flex:2"><label>Fecha *</label><input id="ffec" type="date" value="${fecha}"></div>
       <div style="flex:1"><label>Hora</label><input id="fhor" type="time"></div></div>
     <div id="fexpw"><label id="fexpl">Expediente</label><input id="fexp" placeholder="Número (917/2026), actor o demandado" autocomplete="off" value="${exp ? esc(numExp(exp) + " · " + exp.actor + " vs " + exp.demandada) : ""}">
       <div id="fexpr"></div></div>
     <label id="flugl">Juzgado / lugar</label><input id="flug" value="${exp ? esc(exp.juzgado || "") : ""}">
     <label>Recordatorio (la computadora avisa)</label><div class="chips" id="frec">${[[15,"15 min"],[30,"30 min"],[60,"1 hora"],[1440,"1 día"]].map(([m,t]) => `<button data-m="${m}">${t} antes</button>`).join("")}</div>
-    <label>Notas</label><textarea id="fnot"></textarea>
+    <label>Notas</label><textarea id="fnot">${esc(pre.notas || "")}</textarea>
     <div id="fmsg" style="color:#E06C6C;min-height:22px;margin-top:8px"></div>
     <button class="btn p" style="width:100%" id="fok">Guardar evento</button>`);
   let recTocado = false;

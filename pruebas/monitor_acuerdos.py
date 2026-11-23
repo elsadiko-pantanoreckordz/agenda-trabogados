@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import sys
 import tempfile
+from datetime import date
 from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parent.parent
@@ -39,12 +40,22 @@ def base_con_ejemplos(carpeta: Path):
 
 
 def pruebas_normalizacion() -> None:
-    print("\n── Normalización de expedientes ──")
-    probar("las tres formas dan el mismo canónico",
-           {expedientes.canonico(x) for x in ("123/2024", "00123/2024", "123/2024-II")},
-           {"123/2024"})
-    probar("conserva el cuaderno", str(expedientes.normalizar("123/2024-II")), "123/2024-II")
-    probar("no inventa expedientes", expedientes.canonico("acuerdo sin número"), "")
+    """Usa la misma tabla de casos que la prueba de la agenda, para que la
+    computadora y la tablet normalicen exactamente igual."""
+    print("\n── Normalización de expedientes (tabla compartida) ──")
+    tabla = json.loads((RAIZ / "pruebas" / "casos_expedientes.json").read_text(encoding="utf-8"))
+    hoy = date.fromisoformat(tabla["_hoy"])
+    malos = 0
+    for entrada, canon, completo in tabla["casos"]:
+        e = expedientes.normalizar(entrada, hoy=hoy)
+        obtenido = (e.canonico if e else "", e.completo if e else "")
+        if obtenido != (canon, completo):
+            print(f"FALLA {entrada!r}: {obtenido!r} (se esperaba {(canon, completo)!r})")
+            malos += 1
+    probar(f"los {len(tabla['casos'])} casos de la tabla compartida", malos, 0)
+    ext = tabla["_extraccion"]
+    probar("extrae todos sin repetir",
+           [str(x) for x in expedientes.extraer(ext["texto"], hoy=hoy)], ext["esperado"])
 
 
 def pruebas_almacen(carpeta: Path) -> None:
