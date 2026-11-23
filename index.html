@@ -356,6 +356,66 @@ function completarLocal(ev) {
   return encolar({uid: uid(), tipo: "completar", id: ev.id || null, evento_uid: ev.id ? null : ev.uid});
 }
 const pendientes = () => D.eventos.filter(e => e.estatus === "Pendiente" || e.estatus === "En proceso");
+
+// ── avisos de riesgo ───────────────────────────────────
+// Todo se calcula aquí, en el dispositivo: no sale ningún dato ni se necesita red.
+const DURACION = {"Audiencia": 120, "Diligencia": 120, "Cita con cliente": 60, "Revisión de expediente": 60, "Reunión": 60, "Cita": 60};
+const enMinutos = h => { const [a, b] = String(h || "").split(":").map(Number); return Number.isFinite(a) ? a * 60 + (b || 0) : null; };
+const masDias = n => { const d = new Date(); d.setDate(d.getDate() + n); return iso(d); };
+// Busca a qué distrito judicial pertenece el juzgado escrito en el evento.
+function distritoDe(juzgado) {
+  const j = sa(juzgado); if (!j || !D.tribunales.length) return null;
+  const t = D.tribunales.find(x => sa(x.nombre) === j) || D.tribunales.find(x => sa(x.nombre) && j.includes(sa(x.nombre)))
+         || D.tribunales.find(x => sa(x.nombre).includes(j));
+  if (t) return t.distrito;
+  // Respaldo: el juzgado se captura como texto libre y puede no coincidir con el
+  // catálogo. Casi siempre trae el distrito en el nombre («…Distrito Judicial de
+  // Hermosillo»), así que se busca el distrito dentro del texto.
+  const d = [...new Set(D.tribunales.map(x => x.distrito))].filter(x => x && j.includes(sa(x)));
+  return d.length === 1 ? d[0] : null;
+}
+function riesgos() {
+  const av = [], hoy = iso(new Date()), p = pendientes();
+  const prox = p.filter(e => e.fecha >= hoy && e.fecha <= masDias(14));
+  const porDia = {};
+  prox.forEach(e => (porDia[e.fecha] = porDia[e.fecha] || []).push(e));
+
+  for (const f of Object.keys(porDia).sort()) {
+    // 1. Compromisos que se enciman o quedan pegados (solo los que tienen hora).
+    const conHora = porDia[f].filter(e => enMinutos(e.hora) !== null).sort((a, b) => enMinutos(a.hora) - enMinutos(b.hora));
+    for (let i = 1; i < conHora.length; i++) {
+      const a = conHora[i - 1], b = conHora[i];
+      const fin = enMinutos(a.hora) + (DURACION[a.tipo] || 60), ini = enMinutos(b.hora);
+      if (ini < fin) av.push({n: 2, t: `${largo(f)}: «${a.titulo}» (${a.hora}) se encima con «${b.titulo}» (${b.hora}).`});
+      else if (ini - fin < 30) av.push({n: 1, t: `${largo(f)}: entre «${a.titulo}» (${a.hora}) y «${b.titulo}» (${b.hora}) quedan menos de 30 minutos.`});
+    }
+    // 2. Diligencias en distritos judiciales distintos el mismo día: el traslado puede no alcanzar.
+    const dis = [...new Set(porDia[f].map(e => distritoDe(e.juzgado)).filter(Boolean))];
+    if (dis.length > 1) av.push({n: 2, t: `${largo(f)}: tienes diligencias en ${dis.join(" y ")}. Revisa si alcanzas el traslado.`});
+  }
+
+  // 3. Vencimiento o vigilancia a tres días o menos sin promoción capturada para ese expediente.
+  p.filter(e => ["Vencimiento", "Vigilancia"].includes(e.tipo) && e.expediente_id && e.fecha >= hoy && e.fecha <= masDias(3))
+   .forEach(e => {
+     const hay = p.some(o => o !== e && o.expediente_id === e.expediente_id && o.tipo === "Promoción / escrito" && o.fecha <= e.fecha);
+     if (!hay) av.push({n: 2, t: `${largo(e.fecha)}: vence «${e.titulo}» y no hay promoción capturada para ese expediente.`});
+   });
+
+  // 4. Expedientes sin un solo movimiento (pasado o futuro) en los últimos 60 días.
+  if (D.expedientes.length) {
+    const corte = masDias(-60);
+    const conMov = new Set(D.eventos.filter(e => e.fecha >= corte).map(e => e.expediente_id).filter(Boolean));
+    const olvidados = D.expedientes.filter(e => !conMov.has(e.id));
+    if (olvidados.length) av.push({n: 0, t: `${olvidados.length} expediente(s) sin movimiento en 60 días: ${olvidados.slice(0, 3).map(numExp).join(", ")}${olvidados.length > 3 ? "…" : ""}`});
+  }
+  return av;
+}
+function panelRiesgos() {
+  const r = riesgos(); if (!r.length) return "";
+  const color = n => n >= 2 ? "var(--rojo)" : n === 1 ? "var(--gold)" : "var(--mut)";
+  return `<h3>Avisos (${r.length})</h3>` +
+    r.map(x => `<div class="tarjeta" style="border-left:4px solid ${color(x.n)}">${esc(x.t)}</div>`).join("");
+}
 const ordenar = l => l.slice().sort((a, b) => (a.fecha + (a.hora || "99")).localeCompare(b.fecha + (b.hora || "99")));
 
 // ── estructura ─────────────────────────────────────────
@@ -404,7 +464,7 @@ function verMiDia() {
   const hoy = iso(new Date()), sem = new Date(); sem.setDate(sem.getDate() + 7);
   const p = ordenar(pendientes());
   const sec = (t, l, c) => `<h3>${t} (${l.length})</h3>` + (l.length ? l.map(e => tarjetaEvento(e, c)).join("") : `<div class="vacio">Nada pendiente.</div>`);
-  $("#main").innerHTML = `<h2>${largo(hoy).replace(/^./, c => c.toUpperCase())}</h2>` +
+  $("#main").innerHTML = `<h2>${largo(hoy).replace(/^./, c => c.toUpperCase())}</h2>` + panelRiesgos() +
     (D.cola.length ? `<div class="tarjeta" style="border-left:4px solid var(--gold)">Tienes ${D.cola.length} cambio(s) guardados en la tablet. Presiona <b>⟳ Sincronizar</b> cuando estés en el Wi-Fi de la computadora.</div>` : "") +
     sec("Atrasados", p.filter(e => e.fecha < hoy), "urg") + sec("Hoy", p.filter(e => e.fecha === hoy), "hoy") +
     sec("Próximos 7 días", p.filter(e => e.fecha > hoy && e.fecha <= iso(sem)), "");
