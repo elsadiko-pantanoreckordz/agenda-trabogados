@@ -21,6 +21,12 @@ paso "Conteo de plazos (aritmética en la computadora)" python3 "$RAIZ/agente/pl
 paso "Cifrado: la tablet cifra, la computadora abre" sh -c "cd '$RAIZ' && node pruebas/cruzado.js"
 paso "Circuito del asistente (modelo simulado)" python3 "$RAIZ/pruebas/circuito.py" "$TMP"
 paso "La agenda acepta y valida las propuestas" node "$RAIZ/pruebas/acepta.js" "$TMP"
+paso "Monitor de Acuerdos (normalización, almacén, seguridad)" python3 "$RAIZ/pruebas/monitor_acuerdos.py"
+if command -v ruff >/dev/null 2>&1; then
+  paso "Revisión de código con ruff" ruff check "$RAIZ/monitor" "$RAIZ/pruebas/monitor_acuerdos.py"
+else
+  echo; echo "── Revisión de código con ruff ──"; echo "   OMITIDA: ruff no está instalado (pip install ruff)"
+fi
 
 echo
 if [ "$fallas" -eq 0 ]; then echo "Todo en orden."; else echo "$fallas prueba(s) fallaron."; fi

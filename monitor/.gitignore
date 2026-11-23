@@ -1,0 +1,5 @@
+datos/
+descargas/
+*.db
+*.db-wal
+*.db-shm
