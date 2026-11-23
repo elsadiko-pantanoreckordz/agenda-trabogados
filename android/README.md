@@ -76,9 +76,22 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
   sin `-r`, una instalación previa hace fallar el comando.
 * **Objetivo:** probar la app sin pasar por la tienda.
 * **Efectos:** instala/actualiza la app. Requiere «Depuración USB» activada en el
-  dispositivo; no requiere root. Reversible: `adb uninstall mx.trabogados.agenda`,
+  dispositivo; no requiere root. Reversible: `adb uninstall mx.trabogados.agenda.debug`,
   que **borra también la base de datos** de la agenda. Respalda antes.
 * **Plataforma:** cualquier sistema con `adb` (incluido en Android Studio).
+
+### ⚠ Depuración y publicación son dos apps distintas
+
+La variante `debug` se instala como `mx.trabogados.agenda.debug` y la `release` como
+`mx.trabogados.agenda`. Para Android son **aplicaciones diferentes, con bases de datos
+diferentes**: lo capturado en una no aparece en la otra. Para pasar los datos de una a
+otra, exporta un «Respaldo completo» cifrado desde la primera e impórtalo en la segunda.
+
+### Recordatorios: la agenda los guarda, pero no avisa
+
+Los minutos de recordatorio de cada evento se almacenan, pero ni esta app ni la versión
+web programan una notificación. Para avisos reales haría falta el permiso
+`POST_NOTIFICATIONS`, alarmas del sistema (`AlarmManager`) y un receptor de arranque.
 
 ### Versión de publicación (release)
 
