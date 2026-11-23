@@ -109,7 +109,7 @@ const DB = { db: null,
   poner(k, v) { return new Promise((ok, mal) => { const t = this.db.transaction("kv", "readwrite");
     t.objectStore("kv").put(v, k); t.oncomplete = ok; t.onerror = () => mal(t.error); }); },
 };
-let D = { eventos: [], expedientes: [], tribunales: [], categorias: null, meta: {}, cola: [] };
+let D = { eventos: [], expedientes: [], tribunales: [], categorias: null, meta: {}, cola: [], peticiones: [], propuestas: [] };
 let SES = null;      // {token, usuario}
 // En GitHub Pages (https) no hay computadora: la app trabaja sola y se sincroniza por archivo.
 const HAY_PC = !/github\.io$/.test(location.hostname);
@@ -279,7 +279,7 @@ function bajar(nombre, obj) {
   const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(obj)], {type: "application/json"}));
   a.download = nombre; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
 }
-const CLAVES_D = ["eventos", "expedientes", "tribunales", "categorias", "meta", "cola"];
+const CLAVES_D = ["eventos", "expedientes", "tribunales", "categorias", "meta", "cola", "peticiones", "propuestas"];
 function panelArchivo() {
   const f = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "");
   const v = hoja(`<div class="hojacab"><h2 style="margin:0">Sincronizar con la computadora</h2><button class="x">×</button></div>
@@ -288,6 +288,8 @@ function panelArchivo() {
     <div class="t2" style="margin:4px 0 14px">Descarga «cambios_tablet_….json». Guárdalo en OneDrive › Agenda RT; la agenda de la computadora lo importa.</div>
     <label class="btn" style="width:100%;display:block;text-align:center;text-transform:none;letter-spacing:0;font-size:15px;color:var(--txt,inherit);margin:0">⬇ Recibir datos de la computadora<input id="si" type="file" accept=".json,application/json" hidden></label>
     <div class="t2" style="margin:4px 0 14px">Elige el archivo «datos_agenda.json» (OneDrive › Agenda RT). Tus cambios pendientes se conservan.</div>
+    <button class="btn p" style="width:100%" id="sp">⚙ Enviar pendientes al asistente (${D.peticiones.length})</button>
+    <div class="t2" style="margin:4px 0 14px">Genera «pendientes_….json» cifrado. El asistente de la computadora lo lee y te devuelve «propuestas_….json», que recibes con el botón de arriba.</div>
     <button class="btn" style="width:100%" id="sr">⤓ Respaldo completo de la tablet (cifrado)</button>
 `);
   $("#sx").onclick = async () => { if (!D.cola.length) return aviso("No hay cambios pendientes");
@@ -295,6 +297,14 @@ function panelArchivo() {
     try {
       bajar(`cambios_tablet_${f}.json`, await cifrarSync({formato: "agenda-rt-cambios", version: 1, generado: new Date().toISOString(), usuario: SES.usuario, cambios: D.cola}, clave, "cambios"));
       aviso("Archivo cifrado generado. Los cambios siguen marcados hasta que recibas los datos de la computadora.");
+    } catch(e) { aviso(e.message, 1); } };
+  $("#sp").onclick = async () => {
+    if (!D.peticiones.length) return aviso("La charola está vacía");
+    const clave = await pedirClave(); if (!clave) return;
+    try {
+      bajar(`pendientes_${f}.json`, await cifrarSync({formato: "agenda-rt-peticiones", version: 1, generado: new Date().toISOString(),
+        usuario: SES.usuario, peticiones: D.peticiones}, clave, "pendientes"));
+      aviso("Archivo cifrado generado. Los pendientes se quedan en la charola hasta que recibas las propuestas.");
     } catch(e) { aviso(e.message, 1); } };
   $("#sr").onclick = async () => { const clave = await pedirClave(); if (!clave) return;
     try { bajar(`respaldo_tablet_${f}.json`, await cifrarSync({formato: "agenda-rt-respaldo", version: 1, generado: new Date().toISOString(), datos: D}, clave, "respaldo_tablet")); }
@@ -306,11 +316,34 @@ function panelArchivo() {
       if (archivo.size > 50 * 1024 * 1024) throw new Error("El archivo es demasiado grande");
       let p = JSON.parse(await archivo.text());
       if (p && p.formato === "agenda-rt-cifrado") {
-        if (!["datos_agenda", "respaldo_tablet"].includes(p.contenido)) throw new Error("Este archivo no es para recibir en la tablet");
+        if (!["datos_agenda", "respaldo_tablet", "propuestas"].includes(p.contenido)) throw new Error("Este archivo no es para recibir en la tablet");
         const clave = await pedirClave(); if (!clave) return;
         aviso("Descifrando…");
         p = await descifrarSync(p, clave, p.contenido);
       } else if (!confirmarEn("Este archivo NO está cifrado: no se puede comprobar que venga de tu computadora. ¿Usarlo de todos modos?")) return;
+      if (p.formato === "agenda-rt-propuestas") {
+        if (!Array.isArray(p.propuestas)) throw new Error("El archivo del asistente viene dañado");
+        if (p.propuestas.length > 500) throw new Error("El archivo trae demasiadas propuestas");
+        const ya = new Set(D.propuestas.map(x => x.uid));
+        let nuevas = 0;
+        for (const x of p.propuestas) {
+          if (!x || typeof x !== "object") continue;
+          const u = String(x.uid || uid());
+          if (ya.has(u)) continue;
+          ya.add(u); nuevas++;
+          D.propuestas.push({uid: u, peticion_uid: x.peticion_uid ? String(x.peticion_uid) : null,
+            resumen: String(x.resumen || "").slice(0, 300), explicacion: String(x.explicacion || "").slice(0, 2000),
+            fundamento: String(x.fundamento || "").slice(0, 300),
+            conteo: Array.isArray(x.conteo) ? x.conteo.slice(0, 120).map(z => String(z).slice(0, 200)) : [],
+            evento: x.evento && typeof x.evento === "object" ? x.evento : null});
+        }
+        // Se sacan de la charola los pendientes que el asistente ya atendió.
+        const atendidas = new Set((Array.isArray(p.peticiones_atendidas) ? p.peticiones_atendidas : []).map(String));
+        if (atendidas.size) D.peticiones = D.peticiones.filter(x => !atendidas.has(x.uid));
+        await guardar("propuestas", "peticiones");
+        v.remove(); ir("asis");
+        return aviso(`${nuevas} propuesta(s) recibidas · revísalas y apruébalas`);
+      }
       if (p.formato === "agenda-rt-respaldo") {
         if (!p.datos || typeof p.datos !== "object") throw new Error("Respaldo dañado");
         for (const k of CLAVES_D) if (k in p.datos) D[k] = p.datos[k];
@@ -418,8 +451,141 @@ function panelRiesgos() {
 }
 const ordenar = l => l.slice().sort((a, b) => (a.fecha + (a.hora || "99")).localeCompare(b.fecha + (b.hora || "99")));
 
+// ── asistente: charola de pendientes y propuestas (Modo A) ──
+// El asistente trabaja en la computadora. Aquí solo se guarda lo que le vas a
+// pedir y se revisan sus propuestas: nada sale del dispositivo hasta que tú
+// compartes el archivo cifrado, y nada entra a la agenda sin que lo apruebes.
+const IMG_LADO = 1600, IMG_CALIDAD = 0.7, IMG_MAX = 20 * 1024 * 1024;
+
+function reducirImagen(archivo) {
+  return new Promise((ok, mal) => {
+    if (!/^image\//.test(archivo.type || "")) return mal(new Error("Ese archivo no es una imagen"));
+    if (archivo.size > IMG_MAX) return mal(new Error("La imagen es demasiado grande"));
+    const img = new Image(), url = URL.createObjectURL(archivo);
+    img.onload = () => {
+      const f = Math.min(1, IMG_LADO / Math.max(img.width, img.height));
+      const c = document.createElement("canvas");
+      c.width = Math.max(1, Math.round(img.width * f)); c.height = Math.max(1, Math.round(img.height * f));
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      try { ok(c.toDataURL("image/jpeg", IMG_CALIDAD)); } catch (e) { mal(new Error("No se pudo preparar la imagen")); }
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); mal(new Error("No se pudo leer la imagen")); };
+    img.src = url;
+  });
+}
+
+function formPeticion() {
+  let imagen = null, exp = null;
+  const h = hoja(`<div class="hojacab"><h2 style="margin:0">Dejar pendiente al asistente</h2><button class="x">×</button></div>
+    <p class="t2">Escríbelo como te salga. Ejemplo: «vista por tres días del acuerdo del 452/2026, notificado hoy» o «audiencia de pruebas el martes a las 9:30 en el juzgado tercero civil».</p>
+    <label>Qué necesitas</label><textarea id="ptxt" rows="4"></textarea>
+    <label>Expediente (opcional)</label><input id="pexp" placeholder="Número, actor o demandado" autocomplete="off">
+    <div id="pexpr"></div>
+    <label class="btn" style="width:100%;display:block;text-align:center;text-transform:none;letter-spacing:0;font-size:15px;color:var(--txt);margin:8px 0 0">📷 Agregar foto del acuerdo<input id="pimg" type="file" accept="image/*" capture="environment" hidden></label>
+    <div id="pimgm" class="t2" style="margin-top:6px"></div>
+    <div id="pmsg" style="color:#E06C6C;min-height:22px;margin-top:8px"></div>
+    <button class="btn p" style="width:100%" id="pok">Guardar en la charola</button>`);
+
+  $("#pexp", h).oninput = () => {
+    exp = null; const q = $("#pexp", h).value.trim();
+    if (q.length < 2) return $("#pexpr", h).innerHTML = "";
+    $("#pexpr", h).innerHTML = buscarExp(q).slice(0, 6).map(e => `<div class="tarjeta" data-e="${esc(e.id)}" style="padding:8px 12px">
+      <b>${esc(numExp(e))}</b> · ${esc(e.actor)} vs ${esc(e.demandada)}</div>`).join("") || `<div class="t2">Sin coincidencias</div>`;
+    h.querySelectorAll("[data-e]").forEach(d => d.onclick = () => {
+      exp = D.expedientes.find(x => x.id == d.dataset.e);
+      $("#pexp", h).value = `${numExp(exp)} · ${exp.actor} vs ${exp.demandada}`; $("#pexpr", h).innerHTML = "";
+    });
+  };
+  $("#pimg", h).onchange = async ev => {
+    const a = ev.target.files[0]; ev.target.value = "";
+    if (!a) return;
+    $("#pimgm", h).textContent = "Preparando la imagen…";
+    try { imagen = await reducirImagen(a); $("#pimgm", h).textContent = "Foto lista (se reduce para que el archivo no pese)."; }
+    catch (e) { imagen = null; $("#pimgm", h).textContent = ""; $("#pmsg", h).textContent = e.message; }
+  };
+  $("#pok", h).onclick = async () => {
+    const texto = $("#ptxt", h).value.trim();
+    if (!texto && !imagen) return $("#pmsg", h).textContent = "Escribe qué necesitas o agrega una foto";
+    D.peticiones.push({uid: uid(), clase: imagen ? "imagen" : "texto", texto, imagen,
+      expediente_id: exp ? exp.id : null, expediente_num: exp ? numExp(exp) : "", creado: new Date().toISOString()});
+    await guardar("peticiones");
+    h.remove(); aviso("Guardado en la charola · se envía cuando compartas datos"); ir("asis");
+  };
+  setTimeout(() => $("#ptxt", h).focus(), 150);
+}
+
+// Valida una propuesta recibida antes de dejarla tocar la agenda. Lo que viene en
+// el archivo son datos, nunca instrucciones: aquí se revisa campo por campo.
+function eventoDePropuesta(p) {
+  const e = p && p.evento;
+  if (!e || typeof e !== "object") throw new Error("La propuesta no trae un evento");
+  if (!D.categorias) throw new Error("Faltan tus categorías");
+  const cat = Object.keys(D.categorias.categorias).includes(e.categoria) ? e.categoria : "Asunto del despacho";
+  if (!D.categorias.categorias[cat].includes(e.tipo)) throw new Error(`El tipo «${String(e.tipo).slice(0, 40)}» no existe en tus categorías`);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(e.fecha || "")) throw new Error("La propuesta no trae una fecha válida");
+  let exp = null;
+  if (e.expediente_id != null) exp = D.expedientes.find(x => x.id === e.expediente_id) || null;
+  if (!exp && e.expediente_num) exp = D.expedientes.find(x => numExp(x) === String(e.expediente_num).trim()) || null;
+  return {categoria: cat, tipo: e.tipo, titulo: String(e.titulo || "").trim().slice(0, 200), fecha: e.fecha,
+    hora: /^\d{2}:\d{2}$/.test(e.hora || "") ? e.hora : "",
+    expediente_id: exp ? exp.id : null, lugar: String(e.lugar || (exp ? exp.juzgado : "") || "").slice(0, 200),
+    notas: String(e.notas || "").slice(0, 2000),
+    recordatorios: Array.isArray(e.recordatorios) ? e.recordatorios.map(Number).filter(n => Number.isInteger(n) && n > 0 && n <= 20160).slice(0, 4) : []};
+}
+
+function tarjetaPropuesta(p) {
+  const e = p.evento || {};
+  const conteo = Array.isArray(p.conteo) && p.conteo.length
+    ? `<details style="margin-top:6px"><summary class="t2">Ver el conteo día por día</summary><div class="t2">${p.conteo.map(x => esc(String(x))).join("<br>")}</div></details>` : "";
+  return `<div class="tarjeta" style="border-left:4px solid var(--gold)">
+    <div class="t1">${esc(p.resumen || e.titulo || "Propuesta")}</div>
+    <div class="t2">${esc(e.tipo || "")}${e.fecha ? " · " + esc(largo(e.fecha)) : ""}${e.hora ? " · " + esc(e.hora) : ""}${e.expediente_num ? " · Exp. " + esc(e.expediente_num) : ""}</div>
+    ${p.explicacion ? `<div class="t2" style="margin-top:6px">${esc(p.explicacion)}</div>` : ""}
+    ${p.fundamento ? `<div class="t2" style="margin-top:4px">Fundamento citado: ${esc(p.fundamento)}</div>` : ""}
+    ${conteo}
+    <div class="t2" style="margin-top:6px;color:var(--gold)">Propuesta sin confirmar: verifica el plazo antes de aprobar.</div>
+    <div class="fila" style="margin-top:8px"><button class="btn s p" data-ap="${esc(p.uid)}">✓ Aprobar</button>
+      <button class="btn s" data-de="${esc(p.uid)}">Descartar</button></div></div>`;
+}
+
+function verAsistente() {
+  const pr = D.propuestas || [], pe = D.peticiones || [];
+  $("#main").innerHTML = `<h2>Asistente</h2>
+    <div class="t2">El asistente trabaja en la computadora. Aquí dejas los pendientes y aquí llegan sus propuestas. Nada sale de este dispositivo hasta que tú compartes el archivo cifrado, y nada entra a tu agenda sin que lo apruebes.</div>
+    <h3>Propuestas por revisar (${pr.length})</h3>
+    ${pr.length ? pr.map(tarjetaPropuesta).join("") : `<div class="vacio">Sin propuestas. Llegan al recibir el archivo del asistente en «⟳ Compartir datos».</div>`}
+    <h3>Charola de pendientes (${pe.length})</h3>
+    ${pe.length ? pe.map(x => `<div class="tarjeta"><div class="t2">${esc(new Date(x.creado).toLocaleString("es-MX", {dateStyle: "short", timeStyle: "short"}))}${x.expediente_num ? " · Exp. " + esc(x.expediente_num) : ""}${x.clase === "imagen" ? " · con foto" : ""}</div>
+      <div>${esc(x.texto || "(solo foto)")}</div>
+      <div class="fila" style="margin-top:8px"><button class="btn s" data-bp="${esc(x.uid)}">Quitar</button></div></div>`).join("")
+      : `<div class="vacio">Nada pendiente. Usa el botón + para dejarle trabajo.</div>`}
+    <div class="t2" style="margin-top:12px">Para enviar la charola y recibir las propuestas usa <b>⟳ Compartir datos</b>.</div>`;
+
+  document.querySelectorAll("[data-ap]").forEach(b => b.onclick = async () => {
+    const p = D.propuestas.find(x => x.uid === b.dataset.ap); if (!p) return;
+    try {
+      await crearEventoLocal(eventoDePropuesta(p));
+      D.propuestas = D.propuestas.filter(x => x.uid !== p.uid);
+      await guardar("propuestas");
+      aviso("Aprobado y guardado · se enviará al sincronizar"); verAsistente();
+    } catch (e) { aviso(e.message, 1); }
+  });
+  document.querySelectorAll("[data-de]").forEach(b => b.onclick = async () => {
+    D.propuestas = D.propuestas.filter(x => x.uid !== b.dataset.de);
+    await guardar("propuestas"); verAsistente();
+  });
+  document.querySelectorAll("[data-bp]").forEach(b => b.onclick = async () => {
+    D.peticiones = D.peticiones.filter(x => x.uid !== b.dataset.bp);
+    await guardar("peticiones"); verAsistente();
+  });
+  const f = document.createElement("button");
+  f.className = "fab"; f.textContent = "+"; f.title = "Dejar pendiente";
+  f.onclick = formPeticion; document.body.appendChild(f);
+}
+
 // ── estructura ─────────────────────────────────────────
-const SECC = [["midia","☀","Mi día"],["agenda","📅","Agenda"],["exp","📁","Expedientes"],["tesis","⚖","Tesis"],["trib","🏛","Tribunales"]];
+const SECC = [["midia","☀","Mi día"],["agenda","📅","Agenda"],["exp","📁","Expedientes"],["asis","⚙","Asistente"],["tesis","⚖","Tesis"],["trib","🏛","Tribunales"]];
 let PANT = "midia";
 function iniciar() {
   $("#app").innerHTML = `<header><img src="icono.png" alt=""><div style="flex:1;min-width:0"><h1>Agenda RT</h1>
@@ -435,7 +601,7 @@ function ir(k) {
   PANT = k;
   document.querySelectorAll("nav button").forEach(b => b.classList.toggle("on", b.dataset.k === k));
   document.querySelector(".fab")?.remove();
-  ({midia: verMiDia, agenda: verAgenda, exp: verExpedientes, tesis: verTesis, trib: verTribunales})[k]();
+  ({midia: verMiDia, agenda: verAgenda, exp: verExpedientes, asis: verAsistente, tesis: verTesis, trib: verTribunales})[k]();
 }
 
 // ── eventos ────────────────────────────────────────────

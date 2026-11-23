@@ -12,9 +12,11 @@ class AppAgenda : Application() {
     override fun onCreate() {
         super.onCreate()
         File(cacheDir, DIR_COMPARTIDOS).deleteRecursively()
+        File(cacheDir, DIR_CAMARA).deleteRecursively()
     }
 
     companion object {
         const val DIR_COMPARTIDOS = "compartidos"
+        const val DIR_CAMARA = "camara"
     }
 }

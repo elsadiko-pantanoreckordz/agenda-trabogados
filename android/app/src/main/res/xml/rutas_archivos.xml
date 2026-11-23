@@ -2,4 +2,6 @@
 <paths>
     <!-- Solo esta subcarpeta de la caché se puede compartir; el resto de la app queda fuera. -->
     <cache-path name="compartidos" path="compartidos/" />
+    <!-- Donde la app de cámara deja la foto del acuerdo, para leerla y borrarla. -->
+    <cache-path name="camara" path="camara/" />
 </paths>

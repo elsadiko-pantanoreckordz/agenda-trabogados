@@ -41,14 +41,29 @@ class MainActivity : ComponentActivity() {
     private lateinit var web: WebView
     private var selectorArchivo: ValueCallback<Array<Uri>>? = null
 
+    private var fotoPendiente: Uri? = null
+
     private val abrirArchivo = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { res ->
         val cb = selectorArchivo
         selectorArchivo = null
-        val uri = if (res.resultCode == RESULT_OK) res.data?.data else null
+        val foto = fotoPendiente
+        fotoPendiente = null
+        // La app de cámara no devuelve datos: si no vino nada y habíamos preparado
+        // un archivo para la foto, la foto quedó en ese archivo.
+        val uri = if (res.resultCode != RESULT_OK) null else res.data?.data ?: foto
         cb?.onReceiveValue(if (uri != null) arrayOf(uri) else emptyArray())
     }
+
+    /** Archivo privado donde la app de cámara deja la foto del acuerdo. */
+    private fun archivoParaFoto(): Uri? = try {
+        val dir = java.io.File(cacheDir, AppAgenda.DIR_CAMARA)
+        if (!dir.isDirectory && !dir.mkdirs()) null else {
+            val f = java.io.File.createTempFile("acuerdo", ".jpg", dir)
+            androidx.core.content.FileProvider.getUriForFile(this, "$packageName.archivos", f)
+        }
+    } catch (e: Exception) { null }
 
     override fun onCreate(estado: Bundle?) {
         super.onCreate(estado)
@@ -133,13 +148,41 @@ class MainActivity : ComponentActivity() {
             ): Boolean {
                 selectorArchivo?.onReceiveValue(null)
                 selectorArchivo = cb
-                val i = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                fotoPendiente = null
+
+                // La página pide un tipo concreto: archivos para recibir datos,
+                // imágenes para la foto del acuerdo.
+                val tipos = params?.acceptTypes?.filter { it.isNotBlank() } ?: emptyList()
+                val quiereImagen = tipos.any { it.startsWith("image/") }
+
+                val abrir = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                     addCategory(Intent.CATEGORY_OPENABLE)
                     type = "*/*"
-                    putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("application/json", "text/plain"))
+                    putExtra(
+                        Intent.EXTRA_MIME_TYPES,
+                        if (quiereImagen) arrayOf("image/*") else arrayOf("application/json", "text/plain")
+                    )
                 }
-                return try { abrirArchivo.launch(i); true } catch (e: Exception) {
-                    selectorArchivo = null; cb?.onReceiveValue(null); false
+                val selector = Intent.createChooser(abrir, null)
+
+                if (quiereImagen) {
+                    // Se delega a la app de cámara del sistema: así la agenda no
+                    // necesita permiso de cámara y nunca ve el objetivo directamente.
+                    val destino = archivoParaFoto()
+                    if (destino != null) {
+                        fotoPendiente = destino
+                        val camara = Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE).apply {
+                            putExtra(android.provider.MediaStore.EXTRA_OUTPUT, destino)
+                            addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        if (camara.resolveActivity(packageManager) != null)
+                            selector.putExtra(Intent.EXTRA_INITIAL_INTENTS, arrayOf(camara))
+                        else fotoPendiente = null
+                    }
+                }
+
+                return try { abrirArchivo.launch(selector); true } catch (e: Exception) {
+                    selectorArchivo = null; fotoPendiente = null; cb?.onReceiveValue(null); false
                 }
             }
         }
