@@ -51,12 +51,36 @@ for (const [frag, nombre] of esperado) {
   if (!ok) fallas++;
 }
 
-// Caso negativo: agenda tranquila no debe generar avisos de choque ni de plazo.
+// Sin respaldo nunca hecho: tiene que avisar, porque es lo único que salva los
+// datos si se desinstala la app o se pierde la tablet.
+const probar = (nombre, ok) => { console.log(ok ? `OK   ${nombre}` : `FALLA ${nombre}`); if (!ok) fallas++; };
+probar("avisa que nunca se ha respaldado", r.some(x => x.t.includes("Nunca has hecho un respaldo")));
+
+const hace = n => { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString(); };
+
+// Caso negativo: agenda tranquila y con respaldo reciente no debe generar avisos.
 datos.eventos = [{uid:"z", tipo:"Audiencia", titulo:"Única", fecha:dia(5), hora:"09:00", estatus:"Pendiente", juzgado:"", expediente_id:1}];
 datos.expedientes = [{id:1,num_expediente:"100",ano:"2026"}];
+datos.meta = {ultimo_respaldo: hace(2)};
 T.setD(datos);
 const r2 = T.riesgos().filter(x => x.n >= 1);
 console.log(r2.length === 0 ? "OK   agenda tranquila sin avisos" : `FALLA agenda tranquila generó: ${JSON.stringify(r2)}`);
 if (r2.length) fallas++;
+
+// Respaldo viejo: avisa a partir de los 7 días, y dice cuántos han pasado.
+datos.meta = {ultimo_respaldo: hace(8)};
+T.setD(datos);
+const viejo = T.riesgos().find(x => x.t.includes("último respaldo"));
+probar("avisa cuando el respaldo tiene 8 días", !!viejo && viejo.t.includes("8 días"));
+
+datos.meta = {ultimo_respaldo: hace(6)};
+T.setD(datos);
+probar("a los 6 días todavía no molesta", !T.riesgos().some(x => x.t.includes("último respaldo")));
+
+// Una agenda vacía no tiene nada que respaldar: no debe regañar al recién llegado.
+datos.eventos = []; datos.expedientes = []; datos.meta = {};
+T.setD(datos);
+probar("no pide respaldo si no hay nada que respaldar",
+       !T.riesgos().some(x => x.t.toLowerCase().includes("respaldo")));
 
 process.exit(fallas ? 1 : 0);

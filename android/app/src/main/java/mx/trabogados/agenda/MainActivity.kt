@@ -96,6 +96,9 @@ class MainActivity : ComponentActivity() {
             cacheMode = WebSettings.LOAD_DEFAULT
             setSupportZoom(false)
             builtInZoomControls = false
+            // Así la propia agenda puede mostrar qué versión está instalada: sin
+            // esto no hay forma de saber cuál APK trae la tablet cuando algo falla.
+            userAgentString = "$userAgentString AgendaRT/${BuildConfig.VERSION_NAME}"
         }
         // Depuración remota jamás en la app instalada (solo en compilaciones debug).
         WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)

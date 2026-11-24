@@ -22,6 +22,36 @@ taxi o en una sala de espera.
       fuera del aparato. Si se pierde, no pierdes el trabajo; y si alguien se topa
       con el respaldo, no puede abrirlo.
 
+## 1 bis. Perder los datos es más fácil que perder la tablet
+
+Esto pasó de verdad y por eso está aquí arriba.
+
+- [ ] **Antes de instalar cualquier versión nueva de la app, exporta un respaldo.**
+      «⟳ Compartir datos → Respaldo completo». Treinta segundos.
+- [ ] **Si Android dice «No se pudo instalar la aplicación» al actualizar, NO
+      desinstales la vieja sin respaldar primero.** Al desinstalar se borra la
+      base de datos y no hay forma de recuperarla.
+- [ ] **La agenda te avisa** en «Mi día» cuando llevas 7 días sin respaldo, o si
+      nunca has hecho uno. Ese aviso no es decorativo.
+- [ ] **No hay copia en la nube, a propósito.** `allowBackup="false"` impide que
+      tus expedientes se suban a Google o se copien al cambiar de teléfono. El
+      precio es que el único respaldo es el que tú haces.
+
+### Si la aplicación desaparece de la tablet
+
+Una app instalada no se esfuma sola. Antes de dar nada por perdido, revisa en
+este orden; ninguna de estas revisiones borra nada:
+
+1. **Ajustes → Aplicaciones → ver todas**, y busca «Agenda RT». Si aparece, solo
+   se perdió el icono: tus datos están intactos.
+2. Si usabas la versión web, abre en Chrome
+   `https://elsadiko-pantanoreckordz.github.io/agenda-trabogados/`. Los datos
+   pertenecen al sitio, no al icono: pueden seguir ahí.
+3. **Play Store → Play Protect.** Google retira apps instaladas fuera de la
+   tienda; si fue eso, ahí queda el registro.
+4. Busca en OneDrive y en Descargas archivos `respaldo_tablet_*.json`. Es de
+   donde se recupera todo.
+
 ## 2. La clave de sincronización
 
 Es la que protege todos los archivos que van y vienen: respaldos, pendientes y

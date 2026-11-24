@@ -291,7 +291,23 @@ function panelArchivo() {
     <button class="btn p" style="width:100%" id="sp">⚙ Enviar pendientes al asistente (${D.peticiones.length})</button>
     <div class="t2" style="margin:4px 0 14px">Genera «pendientes_….json» cifrado. El asistente de la computadora lo lee y te devuelve «propuestas_….json», que recibes con el botón de arriba.</div>
     <button class="btn" style="width:100%" id="sr">⤓ Respaldo completo de la tablet (cifrado)</button>
+    <div class="t2" style="margin:4px 0 0" id="sestado"></div>
 `);
+  // Estado del dispositivo: cuándo fue el último respaldo, qué versión está
+  // instalada y si el sistema prometió no borrar estos datos.
+  (async () => {
+    const e = $("#sestado", v); if (!e) return;
+    const ur = D.meta && D.meta.ultimo_respaldo ? new Date(D.meta.ultimo_respaldo) : null;
+    let persistente = null;
+    try { persistente = await navigator.storage?.persisted?.(); } catch(x) {}
+    e.innerHTML = [
+      ur && !isNaN(ur) ? `Último respaldo: ${ur.toLocaleString("es-MX", {dateStyle: "short", timeStyle: "short"})}`
+                       : "Último respaldo: nunca",
+      VERSION_APP ? `Versión instalada: ${esc(VERSION_APP)}` : "",
+      persistente === true ? "Almacenamiento protegido contra borrado automático."
+        : persistente === false ? "Aviso: el sistema puede borrar estos datos si la tablet se queda sin espacio. Respalda seguido." : "",
+    ].filter(Boolean).join("<br>");
+  })();
   $("#sx").onclick = async () => { if (!D.cola.length) return aviso("No hay cambios pendientes");
     const clave = await pedirClave(); if (!clave) return;
     try {
@@ -307,8 +323,12 @@ function panelArchivo() {
       aviso("Archivo cifrado generado. Los pendientes se quedan en la charola hasta que recibas las propuestas.");
     } catch(e) { aviso(e.message, 1); } };
   $("#sr").onclick = async () => { const clave = await pedirClave(); if (!clave) return;
-    try { bajar(`respaldo_tablet_${f}.json`, await cifrarSync({formato: "agenda-rt-respaldo", version: 1, generado: new Date().toISOString(), datos: D}, clave, "respaldo_tablet")); }
-    catch(e) { aviso(e.message, 1); } };
+    try {
+      bajar(`respaldo_tablet_${f}.json`, await cifrarSync({formato: "agenda-rt-respaldo", version: 1, generado: new Date().toISOString(), datos: D}, clave, "respaldo_tablet"));
+      // Se anota la fecha para poder avisar cuando pase mucho tiempo sin respaldo.
+      D.meta = Object.assign({}, D.meta, {ultimo_respaldo: new Date().toISOString()});
+      await guardar("meta"); pintarSync();
+    } catch(e) { aviso(e.message, 1); } };
   $("#si").onchange = async ev => {
     const archivo = ev.target.files[0]; ev.target.value = "";
     try {
@@ -478,7 +498,18 @@ function riesgos() {
       : {n: 1, t: `${sinRevisar.length} acuerdo(s) nuevos por revisar en «Acuerdos».`});
   }
 
-  // 5. Expedientes sin un solo movimiento (pasado o futuro) en los últimos 60 días.
+  // 5. Sin respaldo reciente. Si se desinstala la app o se pierde la tablet,
+  //    lo único que salva los expedientes es un respaldo cifrado fuera de aquí.
+  if (D.eventos.length || D.expedientes.length) {
+    const ult = D.meta && D.meta.ultimo_respaldo ? new Date(D.meta.ultimo_respaldo) : null;
+    const dias = ult && !isNaN(ult) ? Math.floor((Date.now() - ult.getTime()) / 86400000) : null;
+    if (dias === null)
+      av.push({n: 2, t: "Nunca has hecho un respaldo. Si desinstalas la app o se pierde la tablet, se pierde todo: «⟳ Compartir datos → Respaldo completo»."});
+    else if (dias >= 7)
+      av.push({n: 2, t: `Tu último respaldo es de hace ${dias} días. Haz uno en «⟳ Compartir datos → Respaldo completo».`});
+  }
+
+  // 6. Expedientes sin un solo movimiento (pasado o futuro) en los últimos 60 días.
   if (D.expedientes.length) {
     const corte = masDias(-60);
     const conMov = new Set(D.eventos.filter(e => e.fecha >= corte).map(e => e.expediente_id).filter(Boolean));
@@ -1050,9 +1081,20 @@ function verTribunales() {
   let t; $("#tq2").oninput = () => { clearTimeout(t); t = setTimeout(() => { TF.q = $("#tq2").value; verTribunales(); $("#tq2").focus(); const v = $("#tq2"); v.setSelectionRange(v.value.length, v.value.length); }, 300); };
 }
 
+// ── versión instalada ──────────────────────────────────
+// La app de Android la anuncia en el identificador del navegador. Sin esto no
+// hay forma de saber qué versión trae la tablet cuando algo sale mal.
+const VERSION_APP = (() => {
+  const m = /AgendaRT\/([\w.]+)/.exec(navigator.userAgent || "");
+  return m ? m[1] : "";
+})();
+
 // ── arranque ───────────────────────────────────────────
 (async () => {
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+  // Pide que el navegador NO desaloje estos datos cuando la tablet ande baja de
+  // espacio. Sin esto, el sistema puede borrar la agenda sin avisar.
+  try { await navigator.storage?.persist?.(); } catch(e) {}
   await DB.abrir(); await cargar();
   if (SES && SES.token && D.categorias) iniciar();
   else pantallaLogin("");

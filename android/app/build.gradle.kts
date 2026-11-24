@@ -3,6 +3,15 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+// ── Firma ──────────────────────────────────────────────
+// Android se niega a actualizar una app si la nueva versión viene firmada con
+// otra llave, y la salida habitual (desinstalar la vieja) BORRA la base de datos.
+// Por eso todas las compilaciones, de prueba y de publicación, usan la misma
+// llave. Si no hay llave configurada se cae en la de depuración de siempre, para
+// que quien compile en su computadora no tenga que configurar nada.
+val llaveRuta: String? = System.getenv("ANDROID_KEYSTORE")
+val hayLlavePropia = !llaveRuta.isNullOrBlank() && file(llaveRuta).exists()
+
 android {
     namespace = "mx.trabogados.agenda"
     compileSdk = 35
@@ -12,9 +21,22 @@ android {
         applicationId = "mx.trabogados.agenda"
         minSdk = 24
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        // La numera la compilación (en GitHub, el número de ejecución), para
+        // poder saber qué versión tiene instalada la tablet.
+        versionCode = (System.getenv("ANDROID_VERSION_CODE") ?: "1").toIntOrNull() ?: 1
+        versionName = "1.0.${(System.getenv("ANDROID_VERSION_CODE") ?: "1")}"
         // Sin pruebas instrumentadas por ahora: nada que exponga la app.
+    }
+
+    signingConfigs {
+        if (hayLlavePropia) {
+            create("comun") {
+                storeFile = file(llaveRuta!!)
+                storePassword = System.getenv("ANDROID_KEYSTORE_PASS")
+                keyAlias = System.getenv("ANDROID_KEY_ALIAS") ?: "agenda"
+                keyPassword = System.getenv("ANDROID_KEY_PASS") ?: System.getenv("ANDROID_KEYSTORE_PASS")
+            }
+        }
     }
 
     buildTypes {
@@ -24,10 +46,14 @@ android {
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             // Nunca depurable en release: evita que se lea la base de datos por adb.
             isDebuggable = false
+            if (hayLlavePropia) signingConfig = signingConfigs.getByName("comun")
         }
         debug {
-            applicationIdSuffix = ".debug"
+            // Sin sufijo a propósito: debug y release son la MISMA aplicación, con
+            // la misma base de datos. Con sufijo serían dos apps distintas para
+            // Android y pasar de una a otra parecería que se borraron los datos.
             isMinifyEnabled = false
+            if (hayLlavePropia) signingConfig = signingConfigs.getByName("comun")
         }
     }
 

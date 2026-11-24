@@ -76,16 +76,73 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
   sin `-r`, una instalación previa hace fallar el comando.
 * **Objetivo:** probar la app sin pasar por la tienda.
 * **Efectos:** instala/actualiza la app. Requiere «Depuración USB» activada en el
-  dispositivo; no requiere root. Reversible: `adb uninstall mx.trabogados.agenda.debug`,
+  dispositivo; no requiere root. Reversible: `adb uninstall mx.trabogados.agenda`,
   que **borra también la base de datos** de la agenda. Respalda antes.
 * **Plataforma:** cualquier sistema con `adb` (incluido en Android Studio).
 
-### ⚠ Depuración y publicación son dos apps distintas
+## ⚠ La firma: por qué sin ella se pierden los datos
 
-La variante `debug` se instala como `mx.trabogados.agenda.debug` y la `release` como
-`mx.trabogados.agenda`. Para Android son **aplicaciones diferentes, con bases de datos
-diferentes**: lo capturado en una no aparece en la otra. Para pasar los datos de una a
-otra, exporta un «Respaldo completo» cifrado desde la primera e impórtalo en la segunda.
+Android **se niega a actualizar** una app si la nueva versión viene firmada con
+otra llave («No se pudo instalar la aplicación»). La salida habitual —desinstalar
+la vieja— **borra la base de datos**.
+
+Durante un tiempo este proyecto no fijaba ninguna llave, así que cada compilación
+en GitHub usaba la llave de depuración que generaba esa máquina: **cada APK iba
+firmado distinto y ninguno se podía instalar encima del anterior.** Ya está
+corregido: `debug` y `release` son la misma aplicación (mismo identificador, misma
+base de datos) y ambas usan la misma llave.
+
+### Crear la llave, una sola vez
+
+```sh
+keytool -genkeypair -v -keystore agenda.jks -alias agenda \
+        -keyalg RSA -keysize 4096 -validity 10000
+```
+* **Plataforma:** cualquier sistema con Java (viene con Android Studio).
+* **Para qué sirve:** crea el archivo de llave con el que se firmarán todas las versiones.
+* **Opciones:** `-keystore` → archivo a crear; `-alias` → nombre interno de la llave; `-keyalg RSA -keysize 4096` → tipo y fuerza de la llave; `-validity 10000` → días de vigencia (unos 27 años, para no quedarse sin poder actualizar).
+* **Efectos:** pide una contraseña y algunos datos. Crea `agenda.jks` en la carpeta actual.
+* ⚠ **Guárdalo como guardas una escritura.** Si pierdes ese archivo o su
+  contraseña, **ya no podrás publicar actualizaciones** sobre las instalaciones
+  existentes: la única salida sería desinstalar, perdiendo los datos.
+* ⚠ **Nunca lo subas al repositorio.**
+
+### Darle la llave a GitHub
+
+```sh
+base64 -w0 agenda.jks > agenda.jks.b64
+```
+* **Para qué sirve:** convierte la llave a texto para poder pegarla como secreto.
+* **Opciones:** `-w0` → sin saltos de línea (en macOS es `base64 -i agenda.jks | tr -d '\n'`).
+* **Efectos:** crea un archivo de texto con el contenido de la llave. **Bórralo en
+  cuanto lo pegues**: vale lo mismo que la llave.
+
+En GitHub: **Settings → Secrets and variables → Actions → New repository secret**,
+y crea cuatro:
+
+| Secreto | Qué contiene |
+|---|---|
+| `ANDROID_KEYSTORE_B64` | el contenido de `agenda.jks.b64` |
+| `ANDROID_KEYSTORE_PASS` | la contraseña del keystore |
+| `ANDROID_KEY_ALIAS` | `agenda` |
+| `ANDROID_KEY_PASS` | la contraseña de la llave (suele ser la misma) |
+
+El workflow escribe la llave en un archivo temporal, compila y **la borra siempre**,
+aunque la compilación falle. Si los secretos no están puestos, compila igual pero
+deja una advertencia: ese APK no se podrá instalar encima de otro.
+
+### ⚠ El cambio de llave cuesta una desinstalación, una sola vez
+
+El primer APK firmado con la llave nueva tiene, por fuerza, una firma distinta a
+la de los APK anteriores. **Esa instalación exige desinstalar lo que haya, y eso
+borra los datos.** Exporta un respaldo completo antes. A partir de ahí, todas las
+actualizaciones se instalan encima sin perder nada.
+
+### Qué versión tengo instalada
+
+La app lo dice en «⟳ Compartir datos», al final del panel, junto con la fecha del
+último respaldo y si el sistema prometió no borrar los datos. El número coincide
+con el de la ejecución de GitHub que generó ese APK.
 
 ### Recordatorios: la agenda los guarda, pero no avisa
 
@@ -95,9 +152,10 @@ web programan una notificación. Para avisos reales haría falta el permiso
 
 ### Versión de publicación (release)
 
-`assembleRelease` exige una llave de firma propia; sin ella el APK no se puede
-instalar. Hay que crear un *keystore* y añadir `signingConfigs` a
-`app/build.gradle.kts`. **El keystore y su contraseña nunca van al repositorio.**
+`./gradlew assembleRelease` usa la misma llave que las compilaciones de prueba,
+leyendo `ANDROID_KEYSTORE`, `ANDROID_KEYSTORE_PASS`, `ANDROID_KEY_ALIAS` y
+`ANDROID_KEY_PASS` del entorno. Sin esas variables cae en la llave de depuración
+local, cómoda para probar pero **no apta para instalar encima de otra versión**.
 
 ## Cuando cambie la agenda de la PC
 
