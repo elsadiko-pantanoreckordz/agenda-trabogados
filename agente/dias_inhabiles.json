@@ -1,0 +1,13 @@
+{
+  "_comentario": "Días inhábiles que el conteo de plazos descuenta, además de sábados y domingos. Agrega aquí los acuerdos de suspensión de labores y los periodos vacacionales de los tribunales que te importan. Si falta un día, el plazo saldrá más corto de lo real: revisa el conteo que trae cada propuesta.",
+  "_formato": "AAAA-MM-DD",
+  "dias": [
+    "2027-01-01",
+    "2027-02-01",
+    "2027-03-15",
+    "2027-05-01",
+    "2027-09-16",
+    "2027-11-15",
+    "2027-12-25"
+  ]
+}

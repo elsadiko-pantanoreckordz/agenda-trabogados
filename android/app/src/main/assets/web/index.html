@@ -1,0 +1,1116 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0E1117">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icono.png">
+<link rel="apple-touch-icon" href="icono.png">
+<title>Agenda RT · Android</title>
+<style>
+:root{--bg:#0E1117;--panel:#1A2132;--content:#111827;--entry:#0B0F16;--hover:#1E2D45;--gold:#C9A84C;--gold2:#E8C97A;
+--golddk:#9A7A30;--txt:#E8EDF4;--mut:#8A94A6;--borde:#2A3448;--rojo:#C0392B;--verde:#3FA36B;--azul:#5B8DEF}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font:16px/1.4 "Segoe UI",Roboto,system-ui,sans-serif}
+button,input,select,textarea{font:inherit;color:inherit}
+header{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--borde);
+ padding:calc(env(safe-area-inset-top,0px) + 10px) 16px 10px;display:flex;align-items:center;gap:12px}
+header img{width:34px;height:34px;border-radius:6px}
+header h1{font:700 18px Georgia,serif;color:var(--gold);margin:0;flex:1;letter-spacing:.5px}
+header small{color:var(--mut);font-size:12px}
+main{padding:14px 16px calc(90px + env(safe-area-inset-bottom,0px));max-width:1100px;margin:0 auto}
+nav{position:fixed;bottom:0;left:0;right:0;z-index:6;background:#0B0F16;border-top:1px solid var(--borde);
+ display:flex;padding-bottom:env(safe-area-inset-bottom,0px)}
+nav button{flex:1;background:none;border:0;padding:10px 2px 9px;color:var(--mut);font-size:12px;display:flex;flex-direction:column;align-items:center;gap:3px}
+nav button span{font-size:21px;line-height:1}
+nav button.on{color:var(--gold)}
+h2{font:700 20px Georgia,serif;color:var(--gold);margin:4px 0 12px}
+h3{font-size:14px;letter-spacing:.8px;text-transform:uppercase;color:var(--gold2);margin:18px 0 8px}
+.tarjeta{background:var(--panel);border:1px solid var(--borde);border-radius:12px;padding:12px 14px;margin:8px 0;position:relative}
+.tarjeta.urg{border-left:4px solid var(--rojo)}.tarjeta.hoy{border-left:4px solid var(--gold)}.tarjeta.pers{border-left:4px solid var(--azul)}
+.t1{font-weight:600}.t2{color:var(--mut);font-size:13px;margin-top:3px}
+.fila{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.chip{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:5px;background:var(--entry);color:var(--mut);margin-right:4px}
+.chip.j{background:#173B2A;color:#6FCF97}.chip.a{background:#1B2E4A;color:#7FB2F0}.chip.c{background:#3A2E10;color:var(--gold2)}
+.btn{background:var(--entry);border:1px solid var(--borde);border-radius:10px;padding:10px 14px;color:var(--txt)}
+.btn.p{background:var(--gold);border-color:var(--gold);color:#0E1117;font-weight:700}
+.btn.s{padding:6px 10px;font-size:13px}
+.btn.ok{background:#1F4D35;border-color:#2E7A52}
+input,select,textarea{width:100%;background:var(--entry);border:1px solid var(--borde);border-radius:10px;padding:11px 12px;color:var(--txt)}
+textarea{min-height:70px}
+label{display:block;font-size:11px;font-weight:700;letter-spacing:.6px;color:var(--mut);margin:12px 0 4px;text-transform:uppercase}
+.vacio{color:var(--mut);padding:20px 4px;text-align:center}
+.seg{display:flex;background:var(--entry);border:1px solid var(--borde);border-radius:10px;overflow:hidden}
+.seg button{flex:1;border:0;background:none;padding:9px 6px;color:var(--mut)}
+.seg button.on{background:var(--golddk);color:#0E1117;font-weight:700}
+.chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px}
+.chips button{white-space:nowrap;border:1px solid var(--borde);background:var(--entry);border-radius:20px;padding:7px 13px;color:var(--mut)}
+.chips button.on{background:var(--golddk);color:#0E1117;border-color:var(--gold)}
+.cal{background:var(--panel);border-radius:12px;padding:10px;border:1px solid var(--borde)}
+.calcab{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.calcab b{font:700 17px Georgia,serif;color:var(--gold)}
+.rej{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.rej .d{text-align:center;font-size:11px;color:var(--mut);font-weight:700;padding:3px 0}
+.dia{aspect-ratio:1/0.85;border-radius:8px;background:var(--content);border:1px solid transparent;display:flex;flex-direction:column;
+ align-items:center;justify-content:center;font-size:15px;user-select:none;-webkit-user-select:none}
+.dia.fuera{opacity:.35}.dia.inh{background:var(--entry)}.dia.ev{background:var(--golddk);color:#0E1117;font-weight:700}
+.dia.ve{background:var(--rojo);color:#fff;font-weight:700}.dia.hoy{border-color:var(--gold)}.dia.sel{outline:2px solid var(--gold2)}
+.dia small{font-size:10px}
+.dos{display:grid;grid-template-columns:1fr;gap:14px}
+@media(min-width:820px){.dos{grid-template-columns:360px 1fr}}
+.fab{position:fixed;right:18px;bottom:calc(84px + env(safe-area-inset-bottom,0px));width:58px;height:58px;border-radius:50%;
+ background:var(--gold);color:#0E1117;font-size:32px;border:0;box-shadow:0 6px 18px #0008;z-index:7}
+.hoja{position:fixed;inset:0;background:#000a;z-index:20;display:flex;align-items:flex-end;justify-content:center}
+.hoja>div{background:var(--content);width:100%;max-width:720px;max-height:92vh;overflow:auto;border-radius:16px 16px 0 0;
+ padding:16px 16px calc(20px + env(safe-area-inset-bottom,0px));border-top:2px solid var(--gold)}
+@media(min-width:820px){.hoja{align-items:center}.hoja>div{border-radius:16px}}
+.hojacab{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.x{background:none;border:0;font-size:26px;color:var(--mut)}
+.ficha{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font-size:13px;background:var(--entry);border-radius:8px;padding:8px 10px;margin-top:8px}
+.ficha b{color:var(--mut);font-weight:600}
+mark{background:var(--gold2);color:#0E1117;border-radius:3px;padding:0 1px}
+a{color:var(--gold2)}
+.aviso{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(150px + env(safe-area-inset-bottom,0px));background:#1F4D35;
+ color:#fff;padding:10px 16px;border-radius:10px;z-index:30;box-shadow:0 4px 14px #0008}
+.aviso.err{background:#6B1E1E}
+.badge{background:#C0392B;color:#fff;border-radius:10px;padding:0 7px;margin-left:4px;font-size:12px}
+header .btn.p{white-space:nowrap}
+.login{max-width:420px;margin:8vh auto;background:var(--panel);border-radius:16px;padding:26px;border:1px solid var(--borde);text-align:center}
+.login img{width:92px;height:92px}
+.login h1{font:700 22px Georgia,serif;color:var(--gold);margin:8px 0 2px}
+.login label{text-align:left}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+/* Agenda RT para tablet — funciona SIN conexión.
+   Los datos viven en la tablet (IndexedDB). «Sincronizar» envía a la computadora lo capturado
+   y descarga lo más reciente. Solo la búsqueda de tesis necesita conexión. */
+const $ = (s, r=document) => r.querySelector(s);
+const esc = t => String(t ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const sa = t => String(t ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+const DIAS = ["domingo","lunes","martes","miércoles","jueves","viernes","sábado"];
+const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+const deIso = s => { const [a,m,d] = s.split("-").map(Number); return new Date(a, m-1, d); };
+const largo = s => { const d = deIso(s); return `${DIAS[d.getDay()]} ${d.getDate()} de ${MESES[d.getMonth()]}`; };
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+const numExp = e => { const n = String(e.num_expediente ?? "").trim(), a = String(e.ano ?? "").trim(); return a && !n.includes("/") ? `${n}/${a}` : n; };
+
+// ── almacenamiento local (IndexedDB) ───────────────────
+const DB = { db: null,
+  abrir() { return new Promise((ok, mal) => { const r = indexedDB.open("agenda_rt_android", 1);
+    r.onupgradeneeded = () => r.result.createObjectStore("kv");
+    r.onsuccess = () => { this.db = r.result; ok(); }; r.onerror = () => mal(r.error); }); },
+  leer(k) { return new Promise(ok => { const r = this.db.transaction("kv").objectStore("kv").get(k);
+    r.onsuccess = () => ok(r.result); r.onerror = () => ok(undefined); }); },
+  poner(k, v) { return new Promise((ok, mal) => { const t = this.db.transaction("kv", "readwrite");
+    t.objectStore("kv").put(v, k); t.oncomplete = ok; t.onerror = () => mal(t.error); }); },
+};
+let D = { eventos: [], expedientes: [], tribunales: [], categorias: null, meta: {}, cola: [], peticiones: [], propuestas: [], acuerdos: [], vigilados: [] };
+let SES = null;      // {token, usuario}
+// En GitHub Pages (https) no hay computadora: la app trabaja sola y se sincroniza por archivo.
+const HAY_PC = false;   // App de Android: base de datos propia, sin servidor.
+const CAT_BASE = {categorias: {"Asunto del despacho": ["Tarea","Audiencia","Diligencia","Vencimiento","Vigilancia","Promoción / escrito","Cita con cliente","Revisión de expediente","Otro"],
+  "Personal / otro": ["Reunión","Cita","Recordatorio","Pago o trámite","Llamada","Personal","Otro"]},
+  requiere: ["Audiencia","Diligencia","Promoción / escrito","Revisión de expediente","Vencimiento","Vigilancia"],
+  defecto: {"Audiencia":"60,1440","Diligencia":"60,1440","Vencimiento":"1440","Vigilancia":"1440","Cita con cliente":"60","Cita":"60","Reunión":"30"}};
+async function cargar() {
+  for (const k of Object.keys(D)) { const v = await DB.leer(k); if (v !== undefined) D[k] = v; }
+  SES = (await DB.leer("sesion")) || null;
+}
+const guardar = (...ks) => Promise.all(ks.map(k => DB.poner(k, D[k])));
+
+// ── comunicación con la computadora (solo al sincronizar / tesis) ──
+async function red(ruta, datos) {
+  const op = {headers: {"Authorization": "Bearer " + (SES?.token || "")}, cache: "no-store"};
+  if (datos !== undefined) { op.method = "POST"; op.headers["Content-Type"] = "application/json"; op.body = JSON.stringify(datos); }
+  if (!HAY_PC) throw new Error("Esta función era de la computadora. En Android usa «⟳ Compartir datos».");
+  let r;
+  try { r = await fetch(ruta, op); } catch(e) { throw new Error("No hay conexión con la computadora. Conéctate al mismo Wi-Fi y vuelve a intentar."); }
+  const j = await r.json().catch(() => ({error: "Respuesta inválida de la computadora"}));
+  if (r.status === 401) { const e = new Error(j.error || "Sesión vencida"); e.sesion = true; throw e; }
+  if (!r.ok) throw new Error(j.error || "Error");
+  return j;
+}
+function aviso(txt, err) {
+  const a = document.createElement("div"); a.className = "aviso" + (err ? " err" : ""); a.textContent = txt;
+  document.body.appendChild(a); setTimeout(() => a.remove(), 3200);
+}
+
+// ── acceso (la primera vez requiere conexión; después funciona sin ella) ──
+async function pantallaLogin(msg, alTerminar) {
+  if (!HAY_PC) return pantallaLocal(alTerminar);
+  let us = []; try { us = await red("/api/usuarios"); } catch(e) {}
+  const ult = SES?.usuario?.usuario || (await DB.leer("ultimo_usuario")) || "";
+  $("#app").innerHTML = `<div class="login"><img src="icono.png" alt=""><h1>TR ABOGADOS</h1>
+    <div style="color:var(--mut)">Agenda Jurídica · tablet</div>
+    ${us.length ? `<label>Usuario</label><select id="lu">${us.map(u => `<option value="${esc(u.usuario)}" ${u.usuario===ult?"selected":""}>${esc(u.nombre)} (${esc(u.usuario)})</option>`).join("")}</select>`
+      : `<label>Usuario</label><input id="lu" value="${esc(ult)}" autocapitalize="none">`}
+    <label>Contraseña</label><input id="lc" type="password" autocomplete="current-password">
+    <div id="lm" style="color:#E06C6C;min-height:22px;margin-top:8px">${esc(msg||"")}</div>
+    <button class="btn p" style="width:100%" id="lb">Entrar</button>
+    <div class="t2" style="margin-top:12px">Para entrar se necesita estar conectado al Wi-Fi de la computadora. Después la agenda funciona sin conexión.</div></div>`;
+  const go = async () => {
+    try {
+      const r = await red("/api/login", {usuario: $("#lu").value, clave: $("#lc").value});
+      SES = {token: r.token, usuario: r.usuario}; await DB.poner("sesion", SES); await DB.poner("ultimo_usuario", r.usuario.usuario);
+      if (alTerminar) return alTerminar();
+      if (!D.meta.ultima) await sincronizar(true);
+      iniciar();
+    } catch(e) { $("#lm").textContent = e.message; }
+  };
+  $("#lb").onclick = go; $("#lc").onkeydown = e => e.key === "Enter" && go(); $("#lc").focus();
+}
+async function pantallaLocal(alTerminar) {
+  const ult = (await DB.leer("ultimo_nombre")) || "";
+  $("#app").innerHTML = `<div class="login"><img src="icono.png" alt=""><h1>TR ABOGADOS</h1>
+    <div style="color:var(--mut)">Agenda Jurídica · tablet</div>
+    <label>Tu nombre</label><input id="ln" value="${esc(ult)}" placeholder="Ej. Lic. Abraham Alvarez">
+    <label>Usuario de la agenda (opcional)</label><input id="lu" autocapitalize="none" placeholder="Ej. aalvarez">
+    <div id="lm" style="color:#E06C6C;min-height:22px;margin-top:8px"></div>
+    <button class="btn p" style="width:100%" id="lb">Entrar</button>
+    <div class="t2" style="margin-top:12px">La agenda funciona en este dispositivo sin internet y con su propia base de datos. Compartir datos con la computadora es opcional.</div></div>`;
+  $("#lb").onclick = async () => {
+    const n = $("#ln").value.trim(); if (!n) { $("#lm").textContent = "Escribe tu nombre"; return; }
+    SES = {token: "local", usuario: {nombre: n, usuario: $("#lu").value.trim() || "tablet"}};
+    await DB.poner("sesion", SES); await DB.poner("ultimo_nombre", n);
+    if (!D.categorias) { D.categorias = CAT_BASE; await guardar("categorias"); }
+    if (!D.tribunales.length) { try { D.tribunales = await (await fetch("tribunales.json")).json(); await guardar("tribunales"); } catch(e) {} }
+    if (alTerminar) return alTerminar();
+    iniciar();
+  };
+}
+async function salir() {
+  if (D.cola.length && !confirmarEn("Hay cambios sin sincronizar. Si sales, se conservan en la tablet y se enviarán la próxima vez.")) return;
+  SES = null; await DB.poner("sesion", null); pantallaLogin("");
+}
+function confirmarEn(t) { return window.confirm ? window.confirm(t) : true; }
+
+// ── sincronización ─────────────────────────────────────
+let SINCRONIZANDO = false;
+async function sincronizar(silencioso) {
+  if (SINCRONIZANDO) return; SINCRONIZANDO = true; pintarSync("Sincronizando…");
+  try {
+    let enviados = 0, errores = [];
+    if (D.cola.length) {
+      const r = await red("/api/sync/subir", {cambios: D.cola});
+      enviados = r.aplicados + r.repetidos; errores = r.errores || [];
+      const conError = new Set(errores.map(e => e.uid));
+      D.cola = D.cola.filter(c => conError.has(c.uid));          // lo rechazado se queda para revisarse
+      await guardar("cola");
+    }
+    const p = await red("/api/sync/descargar");
+    D.eventos = p.eventos; D.expedientes = p.expedientes; D.tribunales = p.tribunales; D.categorias = p.categorias;
+    // lo que sigue en la cola se vuelve a mostrar encima de lo descargado
+    for (const c of D.cola) aplicarLocal(c);
+    D.meta = {ultima: new Date().toISOString(), servidor: p.generado};
+    await guardar("eventos", "expedientes", "tribunales", "categorias", "meta");
+    if (!silencioso || enviados || errores.length)
+      aviso(errores.length ? `${errores.length} cambio(s) no se pudieron enviar: ${errores[0].error}` :
+            `Sincronizado${enviados ? ` · ${enviados} cambio(s) enviados` : ""} · ${D.eventos.length} eventos, ${D.expedientes.length} expedientes`, !!errores.length);
+    if (PANT) ir(PANT);
+  } catch(e) {
+    if (e.sesion) { SINCRONIZANDO = false; pintarSync(); return pantallaLogin("Vuelve a escribir tu contraseña para sincronizar.", () => { iniciar(); sincronizar(); }); }
+    aviso(e.message, 1);
+  } finally { SINCRONIZANDO = false; pintarSync(); }
+}
+function pintarSync(txt) {
+  const b = $("#bsync"); if (!b) return;
+  const n = D.cola.length;
+  b.innerHTML = txt ? `⟳ ${txt}` : `⟳ Compartir datos${n ? ` <span class="badge">${n}</span>` : ""}`;
+  const u = $("#ultsync");
+  if (u) u.textContent = D.meta.ultima ? "Última sincronización: " + new Date(D.meta.ultima).toLocaleString("es-MX", {dateStyle: "short", timeStyle: "short"}) : "Sin sincronizar";
+}
+
+// ── cifrado de los archivos de sincronización (AES-256-GCM + PBKDF2-SHA256, igual que la PC) ──
+// Cifra Y autentica: un archivo alterado o que no venga de tu agenda se rechaza.
+let CLAVE_SYNC = null;                       // solo en memoria mientras la app está abierta
+const SYNC_ITER = 600000, SYNC_MIN = 10;
+const aB64 = u8 => { let s = ""; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); };
+const deB64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+const aadSync = c => new TextEncoder().encode(`agenda-rt|${c}|v1`);
+async function llaveSync(clave, sal, iter) {
+  if (!(window.crypto && crypto.subtle)) throw new Error("Este navegador no permite cifrar (abre la app desde https)");
+  const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(clave), "PBKDF2", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey({name: "PBKDF2", hash: "SHA-256", salt: sal, iterations: iter}, base,
+    {name: "AES-GCM", length: 256}, false, ["encrypt", "decrypt"]);
+}
+async function cifrarSync(obj, clave, contenido) {
+  const sal = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({name: "AES-GCM", iv, additionalData: aadSync(contenido)},
+    await llaveSync(clave, sal, SYNC_ITER), new TextEncoder().encode(JSON.stringify(obj))));
+  return {formato: "agenda-rt-cifrado", version: 1, contenido, kdf: {alg: "PBKDF2-SHA256", iter: SYNC_ITER, sal: aB64(sal)},
+    cifrado: "AES-256-GCM", iv: aB64(iv), datos: aB64(ct)};
+}
+async function descifrarSync(s, clave, contenido) {
+  if (s.formato !== "agenda-rt-cifrado" || s.version !== 1 || s.contenido !== contenido) throw new Error("Este archivo no es del tipo esperado");
+  const it = Number(s.kdf && s.kdf.iter);
+  if (!s.kdf || s.kdf.alg !== "PBKDF2-SHA256" || !(it >= 100000 && it <= 5000000)) throw new Error("Archivo cifrado dañado");
+  let pl;
+  try {
+    pl = await crypto.subtle.decrypt({name: "AES-GCM", iv: deB64(s.iv), additionalData: aadSync(contenido)},
+      await llaveSync(clave, deB64(s.kdf.sal), it), deB64(s.datos));
+  } catch(e) { CLAVE_SYNC = null; throw new Error("La clave de sincronización no es correcta o el archivo fue alterado"); }
+  return JSON.parse(new TextDecoder().decode(pl));
+}
+function pedirClave() {                     // campo de contraseña (no se ve lo que escribes)
+  if (CLAVE_SYNC) return Promise.resolve(CLAVE_SYNC);
+  return new Promise(ok => {
+    const h = hoja(`<div class="hojacab"><h2 style="margin:0">Clave de sincronización</h2><button class="x">×</button></div>
+      <p class="t2">La misma que definiste en la agenda de la computadora (Agenda → ⟳ Sincronizar tablet). Mínimo ${SYNC_MIN} caracteres.</p>
+      <input id="kc" type="password" autocomplete="off">
+      <div id="km" style="color:#E06C6C;min-height:22px;margin-top:8px"></div>
+      <button class="btn p" style="width:100%" id="kb">Continuar</button>`);
+    let listo = false;
+    const fin = v => { if (listo) return; listo = true; h.remove(); ok(v); };
+    $(".x", h).addEventListener("click", () => fin(null));
+    h.onclick = e => { if (e.target === h) fin(null); };
+    const go = () => { const v = $("#kc", h).value; if (v.length < SYNC_MIN) return $("#km", h).textContent = `Mínimo ${SYNC_MIN} caracteres`;
+      CLAVE_SYNC = v; fin(v); };
+    $("#kb", h).onclick = go; $("#kc", h).onkeydown = e => e.key === "Enter" && go(); setTimeout(() => $("#kc", h).focus(), 50);
+  });
+}
+
+// ── sincronizar por archivo (sin red con la computadora) ──
+function bajar(nombre, obj) {
+  // En Android no hay carpeta de descargas del navegador: el archivo se entrega
+  // a Android, que abre el menú de compartir (OneDrive, correo, etc.).
+  const texto = JSON.stringify(obj);
+  if (window.puenteAgenda && window.puenteAgenda.postMessage) {
+    window.puenteAgenda.postMessage(JSON.stringify({accion: "compartir", nombre, contenido: texto}));
+    return aviso("Archivo listo: elige dónde guardarlo o enviarlo.");
+  }
+  if (window.PuenteAgendaLegado && window.PuenteAgendaLegado.guardarArchivo) {
+    return window.PuenteAgendaLegado.guardarArchivo(nombre, texto)
+      ? aviso("Archivo listo: elige dónde guardarlo o enviarlo.")
+      : aviso("No se pudo generar el archivo", 1);
+  }
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([texto], {type: "application/json"}));
+  a.download = nombre; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+const CLAVES_D = ["eventos", "expedientes", "tribunales", "categorias", "meta", "cola", "peticiones", "propuestas", "acuerdos", "vigilados"];
+function panelArchivo() {
+  const f = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "");
+  const v = hoja(`<div class="hojacab"><h2 style="margin:0">Compartir datos (opcional)</h2><button class="x">×</button></div>
+    <p class="t2">Esta agenda guarda todo en este dispositivo y funciona sola. Si quieres, puedes enviar o recibir datos con un archivo cifrado; no es necesario para usarla.</p>
+    <button class="btn p" style="width:100%" id="sx">⬆ Enviar mis cambios (${D.cola.length})</button>
+    <div class="t2" style="margin:4px 0 14px">Genera «cambios_tablet_….json» cifrado y elige a dónde enviarlo (OneDrive, correo…). La agenda de la computadora lo puede importar.</div>
+    <label class="btn" style="width:100%;display:block;text-align:center;text-transform:none;letter-spacing:0;font-size:15px;color:var(--txt,inherit);margin:0">⬇ Recibir datos de un archivo<input id="si" type="file" accept=".json,application/json" hidden></label>
+    <div class="t2" style="margin:4px 0 14px">Elige un archivo «datos_agenda.json» o un respaldo. Tus cambios pendientes se conservan.</div>
+    <button class="btn p" style="width:100%" id="sp">⚙ Enviar pendientes al asistente (${D.peticiones.length})</button>
+    <div class="t2" style="margin:4px 0 14px">Genera «pendientes_….json» cifrado. El asistente de la computadora lo lee y te devuelve «propuestas_….json», que recibes con el botón de arriba.</div>
+    <button class="btn" style="width:100%" id="sr">⤓ Respaldo completo de esta agenda (cifrado)</button>
+    <div class="t2" style="margin:4px 0 0" id="sestado"></div>
+`);
+  // Estado del dispositivo: cuándo fue el último respaldo, qué versión está
+  // instalada y si el sistema prometió no borrar estos datos.
+  (async () => {
+    const e = $("#sestado", v); if (!e) return;
+    const ur = D.meta && D.meta.ultimo_respaldo ? new Date(D.meta.ultimo_respaldo) : null;
+    let persistente = null;
+    try { persistente = await navigator.storage?.persisted?.(); } catch(x) {}
+    e.innerHTML = [
+      ur && !isNaN(ur) ? `Último respaldo: ${ur.toLocaleString("es-MX", {dateStyle: "short", timeStyle: "short"})}`
+                       : "Último respaldo: nunca",
+      VERSION_APP ? `Versión instalada: ${esc(VERSION_APP)}` : "",
+      persistente === true ? "Almacenamiento protegido contra borrado automático."
+        : persistente === false ? "Aviso: el sistema puede borrar estos datos si la tablet se queda sin espacio. Respalda seguido." : "",
+    ].filter(Boolean).join("<br>");
+  })();
+  $("#sx").onclick = async () => { if (!D.cola.length) return aviso("No hay cambios pendientes");
+    const clave = await pedirClave(); if (!clave) return;
+    try {
+      bajar(`cambios_tablet_${f}.json`, await cifrarSync({formato: "agenda-rt-cambios", version: 1, generado: new Date().toISOString(), usuario: SES.usuario, cambios: D.cola}, clave, "cambios"));
+      aviso("Archivo cifrado generado. Los cambios siguen marcados hasta que recibas los datos de la computadora.");
+    } catch(e) { aviso(e.message, 1); } };
+  $("#sp").onclick = async () => {
+    if (!D.peticiones.length) return aviso("La charola está vacía");
+    const clave = await pedirClave(); if (!clave) return;
+    try {
+      bajar(`pendientes_${f}.json`, await cifrarSync({formato: "agenda-rt-peticiones", version: 1, generado: new Date().toISOString(),
+        usuario: SES.usuario, peticiones: D.peticiones, vigilados: D.vigilados || []}, clave, "pendientes"));
+      aviso("Archivo cifrado generado. Los pendientes se quedan en la charola hasta que recibas las propuestas.");
+    } catch(e) { aviso(e.message, 1); } };
+  $("#sr").onclick = async () => { const clave = await pedirClave(); if (!clave) return;
+    try {
+      bajar(`respaldo_tablet_${f}.json`, await cifrarSync({formato: "agenda-rt-respaldo", version: 1, generado: new Date().toISOString(), datos: D}, clave, "respaldo_tablet"));
+      // Se anota la fecha para poder avisar cuando pase mucho tiempo sin respaldo.
+      D.meta = Object.assign({}, D.meta, {ultimo_respaldo: new Date().toISOString()});
+      await guardar("meta"); pintarSync();
+    } catch(e) { aviso(e.message, 1); } };
+  $("#si").onchange = async ev => {
+    const archivo = ev.target.files[0]; ev.target.value = "";
+    try {
+      if (!archivo) return;
+      if (archivo.size > 50 * 1024 * 1024) throw new Error("El archivo es demasiado grande");
+      let p = JSON.parse(await archivo.text());
+      if (p && p.formato === "agenda-rt-cifrado") {
+        if (!["datos_agenda", "respaldo_tablet", "propuestas", "acuerdos"].includes(p.contenido)) throw new Error("Este archivo no es para recibir en la tablet");
+        const clave = await pedirClave(); if (!clave) return;
+        aviso("Descifrando…");
+        p = await descifrarSync(p, clave, p.contenido);
+      } else if (!confirmarEn("Este archivo NO está cifrado: no se puede comprobar que venga de tu computadora. ¿Usarlo de todos modos?")) return;
+      if (p.formato === "agenda-rt-acuerdos") {
+        if (!Array.isArray(p.acuerdos)) throw new Error("El archivo de acuerdos viene dañado");
+        if (p.acuerdos.length > 5000) throw new Error("El archivo trae demasiados acuerdos");
+        // Lo que llega son datos, no instrucciones: cada campo se recorta y se
+        // guarda como texto. Nada de lo que venga aquí entra solo a la agenda.
+        const texto = (x, max) => String(x ?? "").slice(0, max);
+        const porLlave = new Map((D.acuerdos || []).map(a => [a.uid, a]));
+        let nuevos = 0;
+        for (const x of p.acuerdos) {
+          if (!x || typeof x !== "object") continue;
+          const uid = texto(x.huella || x.uid || x.clave, 80);
+          if (!uid) continue;
+          const previo = porLlave.get(uid);
+          const limpio = {
+            uid, fuente: texto(x.fuente, 40), clave: texto(x.clave, 120),
+            expediente: expCanonico(x.expediente || x.expediente_crudo),
+            expediente_crudo: texto(x.expediente_crudo || x.expediente, 60),
+            juzgado: texto(x.juzgado, 200), distrito: texto(x.distrito, 80),
+            materia: texto(x.materia, 60), jurisdiccion: texto(x.jurisdiccion, 40),
+            partes: texto(x.partes, 400),
+            fecha_acuerdo: /^\d{4}-\d{2}-\d{2}$/.test(x.fecha_acuerdo || "") ? x.fecha_acuerdo : "",
+            fecha_publicacion: /^\d{4}-\d{2}-\d{2}$/.test(x.fecha_publicacion || "") ? x.fecha_publicacion : "",
+            sintesis: texto(x.sintesis, 1000), texto: texto(x.texto, 20000),
+            url_documento: /^https:\/\//.test(x.url_documento || "") ? texto(x.url_documento, 500) : "",
+            nuevo: previo ? previo.nuevo : true,
+          };
+          if (previo) Object.assign(previo, limpio);
+          else { D.acuerdos.push(limpio); porLlave.set(uid, limpio); nuevos++; }
+        }
+        D.acuerdos.sort((a, b) => String(b.fecha_acuerdo || "").localeCompare(String(a.fecha_acuerdo || "")));
+        await guardar("acuerdos");
+        v.remove(); ir("acu");
+        return aviso(`${nuevos} acuerdo(s) nuevos · ${D.acuerdos.length} en total`);
+      }
+      if (p.formato === "agenda-rt-propuestas") {
+        if (!Array.isArray(p.propuestas)) throw new Error("El archivo del asistente viene dañado");
+        if (p.propuestas.length > 500) throw new Error("El archivo trae demasiadas propuestas");
+        const ya = new Set(D.propuestas.map(x => x.uid));
+        let nuevas = 0;
+        for (const x of p.propuestas) {
+          if (!x || typeof x !== "object") continue;
+          const u = String(x.uid || uid());
+          if (ya.has(u)) continue;
+          ya.add(u); nuevas++;
+          D.propuestas.push({uid: u, peticion_uid: x.peticion_uid ? String(x.peticion_uid) : null,
+            resumen: String(x.resumen || "").slice(0, 300), explicacion: String(x.explicacion || "").slice(0, 2000),
+            fundamento: String(x.fundamento || "").slice(0, 300),
+            conteo: Array.isArray(x.conteo) ? x.conteo.slice(0, 120).map(z => String(z).slice(0, 200)) : [],
+            evento: x.evento && typeof x.evento === "object" ? x.evento : null});
+        }
+        // Se sacan de la charola los pendientes que el asistente ya atendió.
+        const atendidas = new Set((Array.isArray(p.peticiones_atendidas) ? p.peticiones_atendidas : []).map(String));
+        if (atendidas.size) D.peticiones = D.peticiones.filter(x => !atendidas.has(x.uid));
+        await guardar("propuestas", "peticiones");
+        v.remove(); ir("asis");
+        return aviso(`${nuevas} propuesta(s) recibidas · revísalas y apruébalas`);
+      }
+      if (p.formato === "agenda-rt-respaldo") {
+        if (!p.datos || typeof p.datos !== "object") throw new Error("Respaldo dañado");
+        for (const k of CLAVES_D) if (k in p.datos) D[k] = p.datos[k];
+      } else {
+        if (!Array.isArray(p.eventos) || !Array.isArray(p.expedientes)) throw new Error("El archivo no es de la Agenda RT");
+        const recibidos = new Set(p.aplicados || []);           // uids que la computadora ya registró
+        D.cola = D.cola.filter(c => !recibidos.has(c.uid));
+        D.eventos = p.eventos; D.expedientes = p.expedientes;
+        if (p.tribunales?.length) D.tribunales = p.tribunales; if (p.categorias) D.categorias = p.categorias;
+        for (const c of D.cola) aplicarLocal(c);
+      }
+      D.meta = {ultima: new Date().toISOString(), servidor: p.generado};
+      await guardar(...Object.keys(D)); v.remove(); pintarSync(); ir(PANT);
+      aviso(`Datos recibidos · ${D.eventos.length} eventos, ${D.expedientes.length} expedientes`);
+    } catch(e) { aviso("No se pudo leer el archivo: " + e.message, 1); }
+  };
+}
+
+// ── operaciones locales ────────────────────────────────
+function aplicarLocal(c) {
+  if (c.tipo === "crear_evento") {
+    if (!D.eventos.some(e => e.uid === c.uid)) D.eventos.push(Object.assign({}, c.local, {uid: c.uid, pendiente_sync: true}));
+  } else if (c.tipo === "completar") {
+    const e = D.eventos.find(x => (c.id && x.id === c.id) || (c.evento_uid && x.uid === c.evento_uid));
+    if (e) { e.estatus = "Completado"; e.pendiente_sync = true; }
+  }
+}
+async function encolar(c) { D.cola.push(c); aplicarLocal(c); await guardar("cola", "eventos"); pintarSync(); }
+
+function crearEventoLocal(d) {
+  const tipo = d.tipo, titulo = (d.titulo || "").trim();
+  if (!titulo) throw new Error("El título es obligatorio");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d.fecha || "")) throw new Error("Elige la fecha");
+  const despacho = d.categoria === "Asunto del despacho";
+  const exp = despacho && d.expediente_id ? D.expedientes.find(e => e.id === d.expediente_id) : null;
+  if (despacho && D.categorias.requiere.includes(tipo) && !exp) throw new Error(`Para «${tipo}» elige el expediente`);
+  const c = {uid: uid(), tipo: "crear_evento", datos: Object.assign({}, d, {expediente_id: exp ? exp.id : null}),
+    local: {id: null, tipo, fecha: d.fecha, hora: d.hora || "", titulo: exp ? `${titulo} · Exp. ${numExp(exp)}` : titulo,
+      expediente_id: exp ? exp.id : null, juzgado: d.lugar || exp?.juzgado || "", notas: d.notas || "", estatus: "Pendiente"}};
+  return encolar(c);
+}
+function completarLocal(ev) {
+  return encolar({uid: uid(), tipo: "completar", id: ev.id || null, evento_uid: ev.id ? null : ev.uid});
+}
+const pendientes = () => D.eventos.filter(e => e.estatus === "Pendiente" || e.estatus === "En proceso");
+
+// ── avisos de riesgo ───────────────────────────────────
+// Todo se calcula aquí, en el dispositivo: no sale ningún dato ni se necesita red.
+const DURACION = {"Audiencia": 120, "Diligencia": 120, "Cita con cliente": 60, "Revisión de expediente": 60, "Reunión": 60, "Cita": 60};
+const enMinutos = h => { const [a, b] = String(h || "").split(":").map(Number); return Number.isFinite(a) ? a * 60 + (b || 0) : null; };
+const masDias = n => { const d = new Date(); d.setDate(d.getDate() + n); return iso(d); };
+// Busca a qué distrito judicial pertenece el juzgado escrito en el evento.
+function distritoDe(juzgado) {
+  const j = sa(juzgado); if (!j || !D.tribunales.length) return null;
+  const t = D.tribunales.find(x => sa(x.nombre) === j) || D.tribunales.find(x => sa(x.nombre) && j.includes(sa(x.nombre)))
+         || D.tribunales.find(x => sa(x.nombre).includes(j));
+  if (t) return t.distrito;
+  // Respaldo: el juzgado se captura como texto libre y puede no coincidir con el
+  // catálogo. Casi siempre trae el distrito en el nombre («…Distrito Judicial de
+  // Hermosillo»), así que se busca el distrito dentro del texto.
+  const d = [...new Set(D.tribunales.map(x => x.distrito))].filter(x => x && j.includes(sa(x)));
+  return d.length === 1 ? d[0] : null;
+}
+function riesgos() {
+  const av = [], hoy = iso(new Date()), p = pendientes();
+  const prox = p.filter(e => e.fecha >= hoy && e.fecha <= masDias(14));
+  const porDia = {};
+  prox.forEach(e => (porDia[e.fecha] = porDia[e.fecha] || []).push(e));
+
+  for (const f of Object.keys(porDia).sort()) {
+    // 1. Compromisos que se enciman o quedan pegados (solo los que tienen hora).
+    const conHora = porDia[f].filter(e => enMinutos(e.hora) !== null).sort((a, b) => enMinutos(a.hora) - enMinutos(b.hora));
+    for (let i = 1; i < conHora.length; i++) {
+      const a = conHora[i - 1], b = conHora[i];
+      const fin = enMinutos(a.hora) + (DURACION[a.tipo] || 60), ini = enMinutos(b.hora);
+      if (ini < fin) av.push({n: 2, t: `${largo(f)}: «${a.titulo}» (${a.hora}) se encima con «${b.titulo}» (${b.hora}).`});
+      else if (ini - fin < 30) av.push({n: 1, t: `${largo(f)}: entre «${a.titulo}» (${a.hora}) y «${b.titulo}» (${b.hora}) quedan menos de 30 minutos.`});
+    }
+    // 2. Diligencias en distritos judiciales distintos el mismo día: el traslado puede no alcanzar.
+    const dis = [...new Set(porDia[f].map(e => distritoDe(e.juzgado)).filter(Boolean))];
+    if (dis.length > 1) av.push({n: 2, t: `${largo(f)}: tienes diligencias en ${dis.join(" y ")}. Revisa si alcanzas el traslado.`});
+  }
+
+  // 3. Vencimiento o vigilancia a tres días o menos sin promoción capturada para ese expediente.
+  p.filter(e => ["Vencimiento", "Vigilancia"].includes(e.tipo) && e.expediente_id && e.fecha >= hoy && e.fecha <= masDias(3))
+   .forEach(e => {
+     const hay = p.some(o => o !== e && o.expediente_id === e.expediente_id && o.tipo === "Promoción / escrito" && o.fecha <= e.fecha);
+     if (!hay) av.push({n: 2, t: `${largo(e.fecha)}: vence «${e.titulo}» y no hay promoción capturada para ese expediente.`});
+   });
+
+  // 4. Acuerdos recibidos que todavía no revisas, en expedientes que vigilas.
+  const sinRevisar = (D.acuerdos || []).filter(a => a.nuevo);
+  if (sinRevisar.length) {
+    const vig = new Set(D.vigilados || []);
+    const propios = sinRevisar.filter(a => vig.has(a.expediente));
+    av.push(propios.length
+      ? {n: 2, t: `${propios.length} acuerdo(s) nuevos en expedientes que vigilas. Revísalos en «Acuerdos».`}
+      : {n: 1, t: `${sinRevisar.length} acuerdo(s) nuevos por revisar en «Acuerdos».`});
+  }
+
+  // 5. Sin respaldo reciente. Si se desinstala la app o se pierde la tablet,
+  //    lo único que salva los expedientes es un respaldo cifrado fuera de aquí.
+  if (D.eventos.length || D.expedientes.length) {
+    const ult = D.meta && D.meta.ultimo_respaldo ? new Date(D.meta.ultimo_respaldo) : null;
+    const dias = ult && !isNaN(ult) ? Math.floor((Date.now() - ult.getTime()) / 86400000) : null;
+    if (dias === null)
+      av.push({n: 2, t: "Nunca has hecho un respaldo. Si desinstalas la app o se pierde la tablet, se pierde todo: «⟳ Compartir datos → Respaldo completo»."});
+    else if (dias >= 7)
+      av.push({n: 2, t: `Tu último respaldo es de hace ${dias} días. Haz uno en «⟳ Compartir datos → Respaldo completo».`});
+  }
+
+  // 6. Expedientes sin un solo movimiento (pasado o futuro) en los últimos 60 días.
+  if (D.expedientes.length) {
+    const corte = masDias(-60);
+    const conMov = new Set(D.eventos.filter(e => e.fecha >= corte).map(e => e.expediente_id).filter(Boolean));
+    const olvidados = D.expedientes.filter(e => !conMov.has(e.id));
+    if (olvidados.length) av.push({n: 0, t: `${olvidados.length} expediente(s) sin movimiento en 60 días: ${olvidados.slice(0, 3).map(numExp).join(", ")}${olvidados.length > 3 ? "…" : ""}`});
+  }
+  return av;
+}
+function panelRiesgos() {
+  const r = riesgos(); if (!r.length) return "";
+  const color = n => n >= 2 ? "var(--rojo)" : n === 1 ? "var(--gold)" : "var(--mut)";
+  return `<h3>Avisos (${r.length})</h3>` +
+    r.map(x => `<div class="tarjeta" style="border-left:4px solid ${color(x.n)}">${esc(x.t)}</div>`).join("");
+}
+const ordenar = l => l.slice().sort((a, b) => (a.fecha + (a.hora || "99")).localeCompare(b.fecha + (b.hora || "99")));
+
+// ── acuerdos: normalización de expedientes ────────────
+// Esto tiene que dar EXACTAMENTE el mismo resultado que monitor/expedientes.py
+// en la computadora; si no, los acuerdos no empatarían con tus expedientes.
+// La tabla de casos que lo comprueba es pruebas/casos_expedientes.json.
+const EXP_ROMANO = "(?:I{1,3}|IV|V|VI{1,3}|IX|X{1,2})";
+const EXP_PATRON = new RegExp(
+  "(\\d{1,6})\\s*[/-]\\s*(\\d{2}|\\d{4})(?!\\s*[/-]?\\s*\\d)" +
+  "(?:\\s*[-/]\\s*(" + EXP_ROMANO + "|BIS|TER|[A-Z])|\\s+(" + EXP_ROMANO + "|BIS|TER))?(?![A-Z0-9])", "g");
+const EXP_ANIO_MIN = 1900, EXP_NUM_MAX = 999999;
+
+function expAnio(crudo, hoy) {
+  const n = Number(crudo), tope = (hoy || new Date()).getFullYear();
+  if (crudo.length === 4) return (n >= EXP_ANIO_MIN && n <= tope + 1) ? n : null;
+  let c = 2000 + n;
+  if (c > tope + 1) c = 1900 + n;
+  return (c >= EXP_ANIO_MIN && c <= tope + 1) ? c : null;
+}
+function expExtraer(texto, hoy) {
+  if (!texto) return [];
+  const limpio = sa(texto).toUpperCase(), salida = [], vistos = new Set();
+  EXP_PATRON.lastIndex = 0;
+  let m;
+  while ((m = EXP_PATRON.exec(limpio)) !== null) {
+    // En vez de mirar hacia atrás con la expresión (que no todos los navegadores
+    // antiguos soportan), se revisa a mano el carácter anterior.
+    const antes = m.index > 0 ? limpio[m.index - 1] : "";
+    if (antes && /[\d/-]/.test(antes)) continue;
+    const num = Number(m[1]), anio = expAnio(m[2], hoy);
+    if (anio === null || !(num >= 1 && num <= EXP_NUM_MAX)) continue;
+    const suf = (m[3] || m[4] || "").toUpperCase();
+    const llave = num + "/" + anio + "-" + suf;
+    if (vistos.has(llave)) continue;
+    vistos.add(llave);
+    salida.push({numero: num, anio, sufijo: suf, canonico: `${num}/${anio}`,
+                 completo: suf ? `${num}/${anio}-${suf}` : `${num}/${anio}`});
+  }
+  return salida;
+}
+const expNormalizar = (texto, hoy) => expExtraer(texto, hoy)[0] || null;
+const expCanonico = (texto, hoy) => { const e = expNormalizar(texto, hoy); return e ? e.canonico : ""; };
+
+// ── acuerdos: búsqueda local ───────────────────────────
+// Todo se busca en el dispositivo, sobre lo que ya recibiste. Sin red.
+let ACU = {texto: "", expediente: "", juzgado: "", materia: "", jurisdiccion: "", parte: "",
+           desde: "", hasta: "", nuevos: false, vigilados: false, filtros: false};
+
+function buscarAcuerdos(f) {
+  const lista = D.acuerdos || [];
+  const escrito = String(f.texto || "").trim();
+  const palabras = sa(escrito).split(/\s+/).filter(x => x.length >= 2);
+  // Igual que en la computadora: si escribiste algo que no deja ninguna palabra
+  // buscable, el resultado es NADA, nunca la lista completa.
+  if (escrito && !palabras.length) return [];
+  const canon = expCanonico(f.expediente || "");
+  const vig = new Set(D.vigilados || []);
+
+  return lista.filter(a => {
+    if (f.nuevos && !a.nuevo) return false;
+    if (f.vigilados && !vig.has(a.expediente)) return false;
+    if (f.expediente) {
+      if (canon) { if (a.expediente !== canon) return false; }
+      else if (!sa(a.expediente_crudo || a.expediente).includes(sa(f.expediente))) return false;
+    }
+    for (const [campo, valor] of [["juzgado", f.juzgado], ["materia", f.materia],
+                                  ["jurisdiccion", f.jurisdiccion], ["partes", f.parte]])
+      if (valor && !sa(a[campo] || "").includes(sa(valor))) return false;
+    if (f.desde && (a.fecha_acuerdo || "") < f.desde) return false;
+    if (f.hasta && (a.fecha_acuerdo || "") > f.hasta) return false;
+    if (palabras.length) {
+      const todo = sa([a.expediente, a.expediente_crudo, a.juzgado, a.partes, a.sintesis, a.texto].join(" "));
+      if (!palabras.every(x => todo.includes(x))) return false;
+    }
+    return true;
+  }).sort((a, b) => String(b.fecha_acuerdo || "").localeCompare(String(a.fecha_acuerdo || "")));
+}
+
+async function alternarVigilancia(canon) {
+  if (!canon) return aviso("Ese acuerdo no trae número de expediente", 1);
+  const v = D.vigilados || (D.vigilados = []);
+  const i = v.indexOf(canon);
+  if (i >= 0) { v.splice(i, 1); aviso(`Ya no se vigila ${canon}`); }
+  else { v.push(canon); aviso(`Se vigilará ${canon} · avísale a la computadora al compartir datos`); }
+  await guardar("vigilados");
+}
+
+function tarjetaAcuerdo(a) {
+  const vig = (D.vigilados || []).includes(a.expediente);
+  return `<div class="tarjeta ${a.nuevo ? "hoy" : ""}" data-ac="${esc(a.uid || a.clave)}">
+    <div class="fila" style="justify-content:space-between;gap:8px">
+      <div style="flex:1;min-width:0">
+        <div class="t1">${esc(a.expediente || a.expediente_crudo || "Sin número")}${a.nuevo ? ' <span class="chip c">nuevo</span>' : ""}${vig ? ' <span class="chip">vigilado</span>' : ""}</div>
+        <div class="t2">${esc(a.fecha_acuerdo || "sin fecha")}${a.materia ? " · " + esc(a.materia) : ""}${a.juzgado ? " · " + esc(a.juzgado) : ""}</div>
+        <div class="t2" style="margin-top:4px">${esc((a.sintesis || "").slice(0, 160))}</div>
+      </div></div></div>`;
+}
+
+function verAcuerdos() {
+  const r = buscarAcuerdos(ACU), total = (D.acuerdos || []).length;
+  const nuevos = (D.acuerdos || []).filter(a => a.nuevo).length;
+  const campo = (id, et, val, tipo) => `<div style="flex:1;min-width:120px"><label>${et}</label><input id="${id}" type="${tipo || "text"}" value="${esc(val || "")}"></div>`;
+
+  $("#main").innerHTML = `<h2>Acuerdos</h2>
+    <div class="t2">${total ? `${total} acuerdo(s) recibidos${nuevos ? `, ${nuevos} sin revisar` : ""}.` :
+      "Todavía no has recibido acuerdos. Los descarga la computadora de los boletines oficiales y llegan en «⟳ Compartir datos»."}</div>
+    <div class="fila" style="margin-top:10px"><input id="aq" style="flex:1" placeholder="Buscar: parte, juzgado, palabras del acuerdo" value="${esc(ACU.texto)}">
+      <button class="btn p" id="ab">Buscar</button></div>
+    <div class="chips" style="margin-top:8px">
+      <button id="af" class="${ACU.filtros ? "on" : ""}">Filtros</button>
+      <button id="an" class="${ACU.nuevos ? "on" : ""}">Solo nuevos</button>
+      <button id="av" class="${ACU.vigilados ? "on" : ""}">Solo vigilados</button>
+      ${ACU.texto || ACU.expediente || ACU.juzgado || ACU.materia || ACU.parte || ACU.desde || ACU.hasta ? `<button id="al">Limpiar</button>` : ""}
+    </div>
+    <div id="afw" style="display:${ACU.filtros ? "block" : "none"};margin-top:8px">
+      <div class="fila">${campo("ae", "Expediente", ACU.expediente)}${campo("am", "Materia", ACU.materia)}</div>
+      <div class="fila">${campo("aj", "Juzgado", ACU.juzgado)}${campo("ap", "Parte", ACU.parte)}</div>
+      <div class="fila">${campo("ad", "Desde", ACU.desde, "date")}${campo("ah", "Hasta", ACU.hasta, "date")}</div>
+    </div>
+    <h3>${r.length} resultado(s)</h3>
+    ${r.length ? r.map(tarjetaAcuerdo).join("") : `<div class="vacio">${total ? "Sin coincidencias con estos filtros." : "Nada que mostrar todavía."}</div>`}`;
+
+  const releer = () => {
+    ACU.texto = $("#aq").value.trim();
+    if (ACU.filtros) {
+      ACU.expediente = $("#ae").value.trim(); ACU.materia = $("#am").value.trim();
+      ACU.juzgado = $("#aj").value.trim(); ACU.parte = $("#ap").value.trim();
+      ACU.desde = $("#ad").value; ACU.hasta = $("#ah").value;
+    }
+    verAcuerdos();
+  };
+  $("#ab").onclick = releer;
+  $("#aq").onkeydown = e => { if (e.key === "Enter") releer(); };
+  $("#af").onclick = () => { ACU.filtros = !ACU.filtros; releer(); };
+  $("#an").onclick = () => { ACU.nuevos = !ACU.nuevos; releer(); };
+  $("#av").onclick = () => { ACU.vigilados = !ACU.vigilados; releer(); };
+  if ($("#al")) $("#al").onclick = () => {
+    ACU = {texto: "", expediente: "", juzgado: "", materia: "", jurisdiccion: "", parte: "",
+           desde: "", hasta: "", nuevos: false, vigilados: false, filtros: ACU.filtros};
+    verAcuerdos();
+  };
+  document.querySelectorAll("[data-ac]").forEach(d => d.onclick = () => {
+    const a = (D.acuerdos || []).find(x => (x.uid || x.clave) === d.dataset.ac);
+    if (a) detalleAcuerdo(a);
+  });
+}
+
+function detalleAcuerdo(a) {
+  const canon = a.expediente || "";
+  const vig = (D.vigilados || []).includes(canon);
+  const exp = canon ? D.expedientes.find(e => numExp(e) === canon) : null;
+  const h = hoja(`<div class="hojacab"><h2 style="margin:0">${esc(canon || a.expediente_crudo || "Acuerdo")}</h2><button class="x">×</button></div>
+    <div class="t2">${esc(a.fecha_acuerdo || "sin fecha")}${a.fecha_publicacion ? " · publicado " + esc(a.fecha_publicacion) : ""}${a.fuente ? " · " + esc(a.fuente) : ""}</div>
+    ${a.juzgado ? `<div class="t2" style="margin-top:6px">🏛 ${esc(a.juzgado)}</div>` : ""}
+    ${a.materia || a.jurisdiccion ? `<div class="fila" style="margin-top:6px"><span class="chip c">${esc(a.materia || "")}</span><span class="chip">${esc(a.jurisdiccion || "")}</span></div>` : ""}
+    ${a.partes ? `<div style="margin-top:8px">${esc(a.partes)}</div>` : ""}
+    ${a.sintesis ? `<div class="tarjeta" style="margin-top:10px">${esc(a.sintesis)}</div>` : ""}
+    ${a.texto ? `<details style="margin-top:8px"><summary class="t2">Ver el texto completo</summary><div class="t2" style="white-space:pre-wrap;margin-top:6px">${esc(a.texto)}</div></details>` : ""}
+    ${exp ? `<div class="t2" style="margin-top:10px">Empata con tu expediente ${esc(numExp(exp))} · ${esc(exp.actor || "")} vs ${esc(exp.demandada || "")}</div>`
+          : canon ? `<div class="t2" style="margin-top:10px;color:var(--gold)">Este expediente no está en tu lista de expedientes.</div>` : ""}
+    <button class="btn p" style="width:100%;margin-top:12px" id="acev">＋ Crear evento desde este acuerdo</button>
+    <button class="btn" style="width:100%;margin-top:8px" id="acvig">${vig ? "Dejar de vigilar" : "Vigilar este expediente"}</button>
+    ${a.url_documento ? `<a class="btn s" style="display:block;text-align:center;margin-top:8px" href="${esc(a.url_documento)}" target="_blank" rel="noopener">↗ Abrir el documento oficial</a>` : ""}
+    <div class="t2" style="margin-top:10px">Lo que ves aquí es informativo y viene del boletín. Verifica en el expediente antes de actuar.</div>`);
+
+  if (a.nuevo) { a.nuevo = false; guardar("acuerdos"); }
+  $("#acvig", h).onclick = async () => { await alternarVigilancia(canon); h.remove(); verAcuerdos(); };
+  $("#acev", h).onclick = () => {
+    h.remove();
+    // Propone, no crea: abre el formulario de siempre con los datos del acuerdo
+    // y tú decides el tipo, la fecha y si se guarda.
+    formEvento(a.fecha_acuerdo && /^\d{4}-\d{2}-\d{2}$/.test(a.fecha_acuerdo) ? a.fecha_acuerdo : iso(new Date()),
+               exp, {titulo: (a.sintesis || "").slice(0, 80),
+                     notas: `Del acuerdo del ${a.fecha_acuerdo || "¿?"} · ${a.fuente || ""}\n${a.sintesis || ""}`});
+  };
+}
+
+// ── asistente: charola de pendientes y propuestas (Modo A) ──
+// El asistente trabaja en la computadora. Aquí solo se guarda lo que le vas a
+// pedir y se revisan sus propuestas: nada sale del dispositivo hasta que tú
+// compartes el archivo cifrado, y nada entra a la agenda sin que lo apruebes.
+const IMG_LADO = 1600, IMG_CALIDAD = 0.7, IMG_MAX = 20 * 1024 * 1024;
+
+function reducirImagen(archivo) {
+  return new Promise((ok, mal) => {
+    if (!/^image\//.test(archivo.type || "")) return mal(new Error("Ese archivo no es una imagen"));
+    if (archivo.size > IMG_MAX) return mal(new Error("La imagen es demasiado grande"));
+    const img = new Image(), url = URL.createObjectURL(archivo);
+    img.onload = () => {
+      const f = Math.min(1, IMG_LADO / Math.max(img.width, img.height));
+      const c = document.createElement("canvas");
+      c.width = Math.max(1, Math.round(img.width * f)); c.height = Math.max(1, Math.round(img.height * f));
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      try { ok(c.toDataURL("image/jpeg", IMG_CALIDAD)); } catch (e) { mal(new Error("No se pudo preparar la imagen")); }
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); mal(new Error("No se pudo leer la imagen")); };
+    img.src = url;
+  });
+}
+
+function formPeticion() {
+  let imagen = null, exp = null;
+  const h = hoja(`<div class="hojacab"><h2 style="margin:0">Dejar pendiente al asistente</h2><button class="x">×</button></div>
+    <p class="t2">Escríbelo como te salga. Ejemplo: «vista por tres días del acuerdo del 452/2026, notificado hoy» o «audiencia de pruebas el martes a las 9:30 en el juzgado tercero civil».</p>
+    <label>Qué necesitas</label><textarea id="ptxt" rows="4"></textarea>
+    <label>Expediente (opcional)</label><input id="pexp" placeholder="Número, actor o demandado" autocomplete="off">
+    <div id="pexpr"></div>
+    <label class="btn" style="width:100%;display:block;text-align:center;text-transform:none;letter-spacing:0;font-size:15px;color:var(--txt);margin:8px 0 0">📷 Agregar foto del acuerdo<input id="pimg" type="file" accept="image/*" capture="environment" hidden></label>
+    <div id="pimgm" class="t2" style="margin-top:6px"></div>
+    <div id="pmsg" style="color:#E06C6C;min-height:22px;margin-top:8px"></div>
+    <button class="btn p" style="width:100%" id="pok">Guardar en la charola</button>`);
+
+  $("#pexp", h).oninput = () => {
+    exp = null; const q = $("#pexp", h).value.trim();
+    if (q.length < 2) return $("#pexpr", h).innerHTML = "";
+    $("#pexpr", h).innerHTML = buscarExp(q).slice(0, 6).map(e => `<div class="tarjeta" data-e="${esc(e.id)}" style="padding:8px 12px">
+      <b>${esc(numExp(e))}</b> · ${esc(e.actor)} vs ${esc(e.demandada)}</div>`).join("") || `<div class="t2">Sin coincidencias</div>`;
+    h.querySelectorAll("[data-e]").forEach(d => d.onclick = () => {
+      exp = D.expedientes.find(x => x.id == d.dataset.e);
+      $("#pexp", h).value = `${numExp(exp)} · ${exp.actor} vs ${exp.demandada}`; $("#pexpr", h).innerHTML = "";
+    });
+  };
+  $("#pimg", h).onchange = async ev => {
+    const a = ev.target.files[0]; ev.target.value = "";
+    if (!a) return;
+    $("#pimgm", h).textContent = "Preparando la imagen…";
+    try { imagen = await reducirImagen(a); $("#pimgm", h).textContent = "Foto lista (se reduce para que el archivo no pese)."; }
+    catch (e) { imagen = null; $("#pimgm", h).textContent = ""; $("#pmsg", h).textContent = e.message; }
+  };
+  $("#pok", h).onclick = async () => {
+    const texto = $("#ptxt", h).value.trim();
+    if (!texto && !imagen) return $("#pmsg", h).textContent = "Escribe qué necesitas o agrega una foto";
+    D.peticiones.push({uid: uid(), clase: imagen ? "imagen" : "texto", texto, imagen,
+      expediente_id: exp ? exp.id : null, expediente_num: exp ? numExp(exp) : "", creado: new Date().toISOString()});
+    await guardar("peticiones");
+    h.remove(); aviso("Guardado en la charola · se envía cuando compartas datos"); ir("asis");
+  };
+  setTimeout(() => $("#ptxt", h).focus(), 150);
+}
+
+// Valida una propuesta recibida antes de dejarla tocar la agenda. Lo que viene en
+// el archivo son datos, nunca instrucciones: aquí se revisa campo por campo.
+function eventoDePropuesta(p) {
+  const e = p && p.evento;
+  if (!e || typeof e !== "object") throw new Error("La propuesta no trae un evento");
+  if (!D.categorias) throw new Error("Faltan tus categorías");
+  const cat = Object.keys(D.categorias.categorias).includes(e.categoria) ? e.categoria : "Asunto del despacho";
+  if (!D.categorias.categorias[cat].includes(e.tipo)) throw new Error(`El tipo «${String(e.tipo).slice(0, 40)}» no existe en tus categorías`);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(e.fecha || "")) throw new Error("La propuesta no trae una fecha válida");
+  let exp = null;
+  if (e.expediente_id != null) exp = D.expedientes.find(x => x.id === e.expediente_id) || null;
+  if (!exp && e.expediente_num) exp = D.expedientes.find(x => numExp(x) === String(e.expediente_num).trim()) || null;
+  return {categoria: cat, tipo: e.tipo, titulo: String(e.titulo || "").trim().slice(0, 200), fecha: e.fecha,
+    hora: /^\d{2}:\d{2}$/.test(e.hora || "") ? e.hora : "",
+    expediente_id: exp ? exp.id : null, lugar: String(e.lugar || (exp ? exp.juzgado : "") || "").slice(0, 200),
+    notas: String(e.notas || "").slice(0, 2000),
+    recordatorios: Array.isArray(e.recordatorios) ? e.recordatorios.map(Number).filter(n => Number.isInteger(n) && n > 0 && n <= 20160).slice(0, 4) : []};
+}
+
+function tarjetaPropuesta(p) {
+  const e = p.evento || {};
+  const conteo = Array.isArray(p.conteo) && p.conteo.length
+    ? `<details style="margin-top:6px"><summary class="t2">Ver el conteo día por día</summary><div class="t2">${p.conteo.map(x => esc(String(x))).join("<br>")}</div></details>` : "";
+  return `<div class="tarjeta" style="border-left:4px solid var(--gold)">
+    <div class="t1">${esc(p.resumen || e.titulo || "Propuesta")}</div>
+    <div class="t2">${esc(e.tipo || "")}${e.fecha ? " · " + esc(largo(e.fecha)) : ""}${e.hora ? " · " + esc(e.hora) : ""}${e.expediente_num ? " · Exp. " + esc(e.expediente_num) : ""}</div>
+    ${p.explicacion ? `<div class="t2" style="margin-top:6px">${esc(p.explicacion)}</div>` : ""}
+    ${p.fundamento ? `<div class="t2" style="margin-top:4px">Fundamento citado: ${esc(p.fundamento)}</div>` : ""}
+    ${conteo}
+    <div class="t2" style="margin-top:6px;color:var(--gold)">Propuesta sin confirmar: verifica el plazo antes de aprobar.</div>
+    <div class="fila" style="margin-top:8px"><button class="btn s p" data-ap="${esc(p.uid)}">✓ Aprobar</button>
+      <button class="btn s" data-de="${esc(p.uid)}">Descartar</button></div></div>`;
+}
+
+function verAsistente() {
+  const pr = D.propuestas || [], pe = D.peticiones || [];
+  $("#main").innerHTML = `<h2>Asistente</h2>
+    <div class="t2">El asistente trabaja en la computadora. Aquí dejas los pendientes y aquí llegan sus propuestas. Nada sale de este dispositivo hasta que tú compartes el archivo cifrado, y nada entra a tu agenda sin que lo apruebes.</div>
+    <h3>Propuestas por revisar (${pr.length})</h3>
+    ${pr.length ? pr.map(tarjetaPropuesta).join("") : `<div class="vacio">Sin propuestas. Llegan al recibir el archivo del asistente en «⟳ Compartir datos».</div>`}
+    <h3>Charola de pendientes (${pe.length})</h3>
+    ${pe.length ? pe.map(x => `<div class="tarjeta"><div class="t2">${esc(new Date(x.creado).toLocaleString("es-MX", {dateStyle: "short", timeStyle: "short"}))}${x.expediente_num ? " · Exp. " + esc(x.expediente_num) : ""}${x.clase === "imagen" ? " · con foto" : ""}</div>
+      <div>${esc(x.texto || "(solo foto)")}</div>
+      <div class="fila" style="margin-top:8px"><button class="btn s" data-bp="${esc(x.uid)}">Quitar</button></div></div>`).join("")
+      : `<div class="vacio">Nada pendiente. Usa el botón + para dejarle trabajo.</div>`}
+    <div class="t2" style="margin-top:12px">Para enviar la charola y recibir las propuestas usa <b>⟳ Compartir datos</b>.</div>`;
+
+  document.querySelectorAll("[data-ap]").forEach(b => b.onclick = async () => {
+    const p = D.propuestas.find(x => x.uid === b.dataset.ap); if (!p) return;
+    try {
+      await crearEventoLocal(eventoDePropuesta(p));
+      D.propuestas = D.propuestas.filter(x => x.uid !== p.uid);
+      await guardar("propuestas");
+      aviso("Aprobado y guardado · se enviará al sincronizar"); verAsistente();
+    } catch (e) { aviso(e.message, 1); }
+  });
+  document.querySelectorAll("[data-de]").forEach(b => b.onclick = async () => {
+    D.propuestas = D.propuestas.filter(x => x.uid !== b.dataset.de);
+    await guardar("propuestas"); verAsistente();
+  });
+  document.querySelectorAll("[data-bp]").forEach(b => b.onclick = async () => {
+    D.peticiones = D.peticiones.filter(x => x.uid !== b.dataset.bp);
+    await guardar("peticiones"); verAsistente();
+  });
+  const f = document.createElement("button");
+  f.className = "fab"; f.textContent = "+"; f.title = "Dejar pendiente";
+  f.onclick = formPeticion; document.body.appendChild(f);
+}
+
+// ── estructura ─────────────────────────────────────────
+const SECC = [["midia","☀","Mi día"],["agenda","📅","Agenda"],["exp","📁","Expedientes"],["acu","§","Acuerdos"],["asis","⚙","Asistente"],["tesis","⚖","Tesis"],["trib","🏛","Tribunales"]];
+let PANT = "midia";
+function iniciar() {
+  $("#app").innerHTML = `<header><img src="icono.png" alt=""><div style="flex:1;min-width:0"><h1>Agenda RT</h1>
+    <small>${esc(SES.usuario.nombre)} · <span id="ultsync"></span></small></div>
+    <button class="btn s p" id="bsync"></button><button class="btn s" id="bsalir">Salir</button></header>
+    <main id="main"></main><nav>${SECC.map(([k,i,t]) => `<button data-k="${k}"><span>${i}</span>${t}</button>`).join("")}</nav>`;
+  $("#bsalir").onclick = salir; $("#bsync").onclick = () => HAY_PC ? sincronizar(false) : panelArchivo();
+  document.querySelectorAll("nav button").forEach(b => b.onclick = () => ir(b.dataset.k));
+  pintarSync(); ir(PANT);
+}
+function ir(k) {
+  if (!$("#main")) return;
+  PANT = k;
+  document.querySelectorAll("nav button").forEach(b => b.classList.toggle("on", b.dataset.k === k));
+  document.querySelector(".fab")?.remove();
+  ({midia: verMiDia, agenda: verAgenda, exp: verExpedientes, acu: verAcuerdos, asis: verAsistente, tesis: verTesis, trib: verTribunales})[k]();
+}
+
+// ── eventos ────────────────────────────────────────────
+const personal = e => !e.expediente_id && D.categorias && D.categorias.categorias["Personal / otro"].includes(e.tipo) && !D.categorias.categorias["Asunto del despacho"].includes(e.tipo);
+function tarjetaEvento(e, clase) {
+  const k = esc(e.id ? "i" + e.id : "u" + e.uid);
+  return `<div class="tarjeta ${clase||""} ${personal(e)?"pers":""}">
+    <div class="fila" style="justify-content:space-between"><div style="flex:1;min-width:0">
+      <div class="t1">${esc(e.titulo)}${e.pendiente_sync ? ' <span class="chip c">sin sincronizar</span>' : ""}</div>
+      <div class="t2">${e.fecha !== iso(new Date()) ? largo(e.fecha) + " · " : ""}${esc(e.hora || "sin hora")} · ${esc(e.tipo)}${e.juzgado ? " · " + esc(e.juzgado) : ""}</div>
+      ${e.notas ? `<div class="t2">${esc(e.notas)}</div>` : ""}</div>
+      ${e.estatus === "Completado" ? '<span class="chip j">Completado</span>' : `<button class="btn s ok" data-comp="${k}">✓ Completar</button>`}</div></div>`;
+}
+function ligarCompletar(rec) {
+  document.querySelectorAll("[data-comp]").forEach(b => b.onclick = async () => {
+    const k = b.dataset.comp, e = D.eventos.find(x => k[0] === "i" ? x.id == k.slice(1) : x.uid === k.slice(1));
+    if (e) { await completarLocal(e); aviso("Completada · se enviará al sincronizar"); rec(); }
+  });
+}
+function fab(fechaFn) {
+  const b = document.createElement("button"); b.className = "fab"; b.textContent = "+"; b.title = "Nuevo evento";
+  b.onclick = () => formEvento(fechaFn()); document.body.appendChild(b);
+}
+
+function verMiDia() {
+  const hoy = iso(new Date()), sem = new Date(); sem.setDate(sem.getDate() + 7);
+  const p = ordenar(pendientes());
+  const sec = (t, l, c) => `<h3>${t} (${l.length})</h3>` + (l.length ? l.map(e => tarjetaEvento(e, c)).join("") : `<div class="vacio">Nada pendiente.</div>`);
+  $("#main").innerHTML = `<h2>${largo(hoy).replace(/^./, c => c.toUpperCase())}</h2>` + panelRiesgos() +
+    (D.cola.length ? `<div class="tarjeta" style="border-left:4px solid var(--gold)">Tienes ${D.cola.length} cambio(s) guardados en la tablet. Presiona <b>⟳ Sincronizar</b> cuando estés en el Wi-Fi de la computadora.</div>` : "") +
+    sec("Atrasados", p.filter(e => e.fecha < hoy), "urg") + sec("Hoy", p.filter(e => e.fecha === hoy), "hoy") +
+    sec("Próximos 7 días", p.filter(e => e.fecha > hoy && e.fecha <= iso(sem)), "");
+  ligarCompletar(verMiDia); fab(() => hoy);
+}
+
+let CAL = new Date(); CAL.setDate(1); let SEL = iso(new Date());
+let ULTIMO = {k: null, t: 0};   // último toque (sobrevive al redibujo del calendario)
+function verAgenda() {
+  const a = CAL.getFullYear(), mes = CAL.getMonth();
+  const ini = new Date(a, mes, 1), primero = new Date(ini); primero.setDate(1 - ((ini.getDay() + 6) % 7));
+  const porDia = {}; pendientes().forEach(e => (porDia[e.fecha] = porDia[e.fecha] || []).push(e));
+  const hoy = iso(new Date());
+  let celdas = ["L","M","M","J","V","S","D"].map(x => `<div class="d">${x}</div>`).join("");
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(primero); d.setDate(primero.getDate() + i); const k = iso(d), l = porDia[k] || [];
+    const venc = l.some(e => e.tipo === "Vencimiento" || e.tipo === "Vigilancia");
+    const cls = ["dia", d.getMonth() !== mes && "fuera", (d.getDay() === 0 || d.getDay() === 6) && "inh",
+      l.length && (venc ? "ve" : "ev"), k === hoy && "hoy", k === SEL && "sel"].filter(Boolean).join(" ");
+    celdas += `<div class="${cls}" data-dia="${k}">${d.getDate()}${l.length ? `<small>●${l.length}</small>` : ""}</div>`;
+  }
+  const lista = ordenar(D.eventos.filter(e => e.fecha === SEL));
+  $("#main").innerHTML = `<h2>Agenda</h2><div class="dos"><div><div class="cal"><div class="calcab">
+      <button class="btn s" id="cp">◀</button><b>${MESES[mes][0].toUpperCase() + MESES[mes].slice(1)} ${a}</b><button class="btn s" id="cn">▶</button></div>
+      <div class="rej">${celdas}</div>
+      <div class="t2" style="margin-top:8px">Toca un día para ver sus eventos; tócalo dos veces (o mantenlo presionado) para agregar uno.</div>
+      <button class="btn s" id="choy" style="margin-top:8px;width:100%">Ir a hoy</button></div></div>
+    <div><h3>${largo(SEL)} (${lista.length})</h3>${lista.length ? lista.map(e => tarjetaEvento(e, e.fecha < hoy && e.estatus !== "Completado" ? "urg" : e.fecha === hoy ? "hoy" : "")).join("") : `<div class="vacio">Sin eventos este día.</div>`}</div></div>`;
+  $("#cp").onclick = () => { CAL.setMonth(CAL.getMonth() - 1); verAgenda(); };
+  $("#cn").onclick = () => { CAL.setMonth(CAL.getMonth() + 1); verAgenda(); };
+  $("#choy").onclick = () => { CAL = new Date(); CAL.setDate(1); SEL = hoy; verAgenda(); };
+  let presion = null;
+  document.querySelectorAll("[data-dia]").forEach(c => {
+    c.onclick = () => {
+      const k = c.dataset.dia, t = Date.now();
+      if (ULTIMO.k === k && t - ULTIMO.t < 600) { ULTIMO = {k: null, t: 0}; return formEvento(k); }
+      ULTIMO = {k, t}; SEL = k;
+      const d = deIso(k); if (d.getMonth() !== CAL.getMonth()) CAL = new Date(d.getFullYear(), d.getMonth(), 1);
+      verAgenda();
+    };
+    c.addEventListener("touchstart", () => { presion = setTimeout(() => { presion = "hecho"; formEvento(c.dataset.dia); }, 650); }, {passive: true});
+    c.addEventListener("touchend", e => { if (presion === "hecho") e.preventDefault(); clearTimeout(presion); presion = null; });
+    c.addEventListener("touchmove", () => { clearTimeout(presion); presion = null; }, {passive: true});
+  });
+  ligarCompletar(verAgenda); fab(() => SEL);
+}
+
+function hoja(html) {
+  const h = document.createElement("div"); h.className = "hoja"; h.innerHTML = `<div>${html}</div>`;
+  h.onclick = e => { if (e.target === h) h.remove(); };
+  document.body.appendChild(h); h.querySelector(".x")?.addEventListener("click", () => h.remove());
+  return h;
+}
+function buscarExp(q) {
+  q = (q || "").trim(); const nums = q.match(/\d+/g) || [];
+  if (nums.length >= 2 && /^\s*\d+\s*[\/\-]\s*\d+\s*$/.test(q)) {
+    const [x, y] = nums, r = D.expedientes.filter(e => (String(e.num_expediente).trim() === x && String(e.ano).trim() === y) || (String(e.num_expediente).trim() === y && String(e.ano).trim() === x));
+    if (r.length) return r;
+  }
+  const t = sa(q).split(/\s+/).filter(Boolean);
+  const l = D.expedientes.filter(e => { const b = sa([e.identificador, numExp(e), e.actor, e.demandada, e.juzgado, e.materia, e.tipo_juicio, e.cliente].join(" ")); return t.every(w => b.includes(w)); });
+  return l.sort((a, b) => (+b.ano || 0) - (+a.ano || 0) || (+b.num_expediente || 0) - (+a.num_expediente || 0)).slice(0, 80);
+}
+function formEvento(fecha, expPre, pre) {
+  const C = D.categorias; let cat = "Asunto del despacho", exp = expPre || null;
+  pre = pre || {};
+  const h = hoja(`<div class="hojacab"><h2 style="margin:0">Nuevo evento</h2><button class="x">×</button></div>
+    <label>Categoría</label><div class="seg" id="fcat">${Object.keys(C.categorias).map(c => `<button data-c="${esc(c)}">${esc(c)}</button>`).join("")}</div>
+    <label>Tipo</label><select id="ftipo"></select>
+    <label>Título *</label><input id="ftit" placeholder="Ej. Audiencia de pruebas" value="${esc(pre.titulo || "")}">
+    <div class="fila"><div style="flex:2"><label>Fecha *</label><input id="ffec" type="date" value="${fecha}"></div>
+      <div style="flex:1"><label>Hora</label><input id="fhor" type="time"></div></div>
+    <div id="fexpw"><label id="fexpl">Expediente</label><input id="fexp" placeholder="Número (917/2026), actor o demandado" autocomplete="off" value="${exp ? esc(numExp(exp) + " · " + exp.actor + " vs " + exp.demandada) : ""}">
+      <div id="fexpr"></div></div>
+    <label id="flugl">Juzgado / lugar</label><input id="flug" value="${exp ? esc(exp.juzgado || "") : ""}">
+    <label>Recordatorio (la computadora avisa)</label><div class="chips" id="frec">${[[15,"15 min"],[30,"30 min"],[60,"1 hora"],[1440,"1 día"]].map(([m,t]) => `<button data-m="${m}">${t} antes</button>`).join("")}</div>
+    <label>Notas</label><textarea id="fnot">${esc(pre.notas || "")}</textarea>
+    <div id="fmsg" style="color:#E06C6C;min-height:22px;margin-top:8px"></div>
+    <button class="btn p" style="width:100%" id="fok">Guardar evento</button>`);
+  let recTocado = false;
+  const recDef = () => { if (recTocado) return; const d = (C.defecto[$("#ftipo", h).value] || ($("#fhor", h).value ? "30" : "1440")).split(",");
+    h.querySelectorAll("#frec button").forEach(b => b.classList.toggle("on", d.includes(b.dataset.m))); };
+  const pintarCat = () => {
+    h.querySelectorAll("#fcat button").forEach(b => b.classList.toggle("on", b.dataset.c === cat));
+    const t = $("#ftipo", h).value; $("#ftipo", h).innerHTML = C.categorias[cat].map(x => `<option ${x===t?"selected":""}>${esc(x)}</option>`).join("");
+    const desp = cat === "Asunto del despacho";
+    $("#fexpw", h).style.display = desp ? "" : "none"; $("#flugl", h).textContent = desp ? "Juzgado / lugar" : "Lugar";
+    $("#fexpl", h).textContent = desp && C.requiere.includes($("#ftipo", h).value) ? "Expediente *" : "Expediente (opcional)";
+    recDef();
+  };
+  h.querySelectorAll("#fcat button").forEach(b => b.onclick = () => { cat = b.dataset.c; pintarCat(); });
+  $("#ftipo", h).onchange = pintarCat; $("#fhor", h).onchange = recDef;
+  h.querySelectorAll("#frec button").forEach(b => b.onclick = () => { recTocado = true; b.classList.toggle("on"); });
+  $("#fexp", h).oninput = () => {
+    exp = null; const q = $("#fexp", h).value.trim(); if (q.length < 2) return $("#fexpr", h).innerHTML = "";
+    const r = buscarExp(q).slice(0, 8);
+    $("#fexpr", h).innerHTML = r.map(e => `<div class="tarjeta" data-e="${esc(e.id)}" style="padding:8px 12px">
+      <b>${esc(numExp(e))}</b> · ${esc(e.actor)} vs ${esc(e.demandada)}<div class="t2">${esc(e.juzgado)}</div></div>`).join("") || `<div class="t2">Sin coincidencias</div>`;
+    h.querySelectorAll("[data-e]").forEach(d => d.onclick = () => { exp = D.expedientes.find(x => x.id == d.dataset.e);
+      $("#fexp", h).value = `${numExp(exp)} · ${exp.actor} vs ${exp.demandada}`; $("#fexpr", h).innerHTML = "";
+      if (!$("#flug", h).value) $("#flug", h).value = exp.juzgado || ""; });
+  };
+  pintarCat();
+  $("#fok", h).onclick = async () => {
+    try {
+      await crearEventoLocal({categoria: cat, tipo: $("#ftipo", h).value, titulo: $("#ftit", h).value, fecha: $("#ffec", h).value,
+        hora: $("#fhor", h).value, expediente_id: exp && exp.id, lugar: $("#flug", h).value, notas: $("#fnot", h).value,
+        recordatorios: [...h.querySelectorAll("#frec button.on")].map(b => +b.dataset.m)});
+      SEL = $("#ffec", h).value; h.remove(); aviso("Guardado en la tablet · se enviará al sincronizar"); ir(PANT);
+    } catch(e) { $("#fmsg", h).textContent = e.message; }
+  };
+  setTimeout(() => $("#ftit", h).focus(), 150);
+}
+
+// ── expedientes ────────────────────────────────────────
+function verExpedientes() {
+  $("#main").innerHTML = `<h2>Expedientes</h2><input id="eq" placeholder="Buscar: 917/2026, 2026-917, actor, demandado o juzgado"><div id="el"></div>`;
+  const pintar = () => { const r = buscarExp($("#eq").value);
+    $("#el").innerHTML = (r.length ? r.map(e => `<div class="tarjeta" data-x="${e.id}"><div class="fila"><span class="chip c">${esc(e.materia)}</span><b>${esc(numExp(e))}</b>
+      <span class="chip">${esc(e.estatus||"")}</span></div><div class="t1" style="margin-top:4px">${esc(e.actor)} <span style="color:var(--mut)">vs</span> ${esc(e.demandada)}</div>
+      <div class="t2">${esc(e.juzgado)} · ${esc(e.tipo_juicio||"")}</div></div>`).join("") : `<div class="vacio">${D.expedientes.length ? "Sin resultados." : "Aún no hay datos en la tablet: presiona ⟳ Sincronizar."}</div>`);
+    document.querySelectorAll("[data-x]").forEach(c => c.onclick = () => detalle(+c.dataset.x)); };
+  let t; $("#eq").oninput = () => { clearTimeout(t); t = setTimeout(pintar, 150); }; pintar();
+}
+function detalle(id) {
+  const e = D.expedientes.find(x => x.id === id), tr = D.tribunales.find(t => t.id === e.tribunal_id);
+  const evs = ordenar(D.eventos.filter(v => v.expediente_id === id)).reverse();
+  const partes = rol => (e.partes || []).filter(p => p.rol === rol).map(p => `<div>${esc(p.representado ? `${p.representado} (por conducto de ${p.nombre})` : p.nombre)}${p.representante_comun ? ' <span class="chip c">Rep. común</span>' : ""}</div>`).join("") ||
+    esc(rol === "actor" ? e.actor : e.demandada);
+  const h = hoja(`<div class="hojacab"><h2 style="margin:0">Exp. ${esc(numExp(e))}</h2><button class="x">×</button></div>
+    <div class="fila"><span class="chip c">${esc(e.materia)}</span><span class="chip">${esc(e.estatus||"")}</span><span class="chip">${esc(e.tipo_juicio||"")}</span></div>
+    <div class="ficha"><b>Actor</b><div>${partes("actor")}</div><b>Demandado</b><div>${partes("demandado")}</div>
+      <b>Juzgado</b><div>${esc(e.juzgado)}</div>${tr && tr.telefono ? `<b>Teléfono</b><div><a href="tel:${esc(tr.telefono.replace(/[^\d+]/g,""))}">${esc(tr.telefono)}</a>${tr.extensiones ? " ext. " + esc(tr.extensiones) : ""}</div>` : ""}
+      ${tr && tr.direccion ? `<b>Dirección</b><div>${esc(tr.direccion)}</div>` : ""}
+      <b>Representamos</b><div>${esc(e.calidad||"")}</div><b>Responsable</b><div>${esc(e.abogado||"")}</div>
+      ${e.observaciones ? `<b>Notas</b><div>${esc(e.observaciones)}</div>` : ""}</div>
+    <h3>Eventos (${evs.length})</h3>${evs.map(v => `<div class="tarjeta ${v.estatus==="Completado"?"":"hoy"}" style="padding:8px 12px">
+      <div class="t1">${esc(v.titulo)}</div><div class="t2">${largo(v.fecha)} · ${esc(v.hora||"")} · ${esc(v.tipo)} · ${esc(v.estatus)}</div></div>`).join("") || `<div class="vacio">Sin eventos.</div>`}
+    <button class="btn p" style="width:100%;margin-top:10px" id="dnue">+ Agregar evento a este expediente</button>`);
+  $("#dnue", h).onclick = () => { h.remove(); formEvento(iso(new Date()), e); };
+}
+
+// ── tesis (requiere conexión con la computadora) ───────
+let TQ = {q: "", materia: "Civil"};
+function verTesis() {
+  $("#main").innerHTML = `<h2>Tesis y jurisprudencia</h2><div class="t2" style="margin-bottom:8px">La búsqueda de tesis necesita conexión con la computadora (consulta el Semanario Judicial en ese momento).</div>
+    <div class="fila"><input id="tq" style="flex:1" placeholder="Palabras clave o registro digital" value="${esc(TQ.q)}">
+    <button class="btn p" id="tb">Buscar</button></div><div class="chips" style="margin-top:10px" id="tm">${["Todas","Civil","Mercantil","Penal","Laboral","Administrativa","Común"].map(x => `<button data-m="${x}" class="${x===TQ.materia?"on":""}">${x}</button>`).join("")}</div>
+    <div id="tr" class="t2" style="margin-top:8px"></div><div id="tl"></div>`;
+  document.querySelectorAll("#tm button").forEach(b => b.onclick = () => { TQ.materia = b.dataset.m; verTesis(); if (TQ.q) buscarTesis(0); });
+  $("#tb").onclick = () => { TQ.q = $("#tq").value.trim(); buscarTesis(0); }; $("#tq").onkeydown = e => e.key === "Enter" && $("#tb").click();
+  if (TQ.q && TQ.res) pintarTesis(TQ.res);
+}
+function marcar(t, terms) {
+  let h = esc(t); const base = sa(h); const pos = [];
+  terms.forEach(w => { let i = base.indexOf(w); while (i >= 0) { pos.push([i, i + w.length]); i = base.indexOf(w, i + w.length); } });
+  pos.sort((a, b) => b[0] - a[0]); pos.forEach(([a, b]) => h = h.slice(0, a) + "<mark>" + h.slice(a, b) + "</mark>" + h.slice(b));
+  return h;
+}
+async function buscarTesis(p) {
+  if (!TQ.q) return;
+  $("#tr").textContent = "Buscando en el Semanario Judicial…"; if (!p) $("#tl").innerHTML = "";
+  try { const r = await red(`/api/tesis?q=${encodeURIComponent(TQ.q)}&materia=${encodeURIComponent(TQ.materia)}&pagina=${p}`);
+    if (p && TQ.res) { r.tesis = TQ.res.tesis.concat(r.tesis); r.excluidas += TQ.res.excluidas; } TQ.res = r; pintarTesis(r);
+  } catch(e) { $("#tr").textContent = e.sesion ? "Sesión vencida: sincroniza y vuelve a entrar." : e.message; }
+}
+function pintarTesis(r) {
+  $("#tr").textContent = `${r.total.toLocaleString()} encontradas en el SJF` + (TQ.materia !== "Todas" ? ` · solo materia ${TQ.materia.toLowerCase()} (${r.excluidas} de otra materia excluidas)` : "");
+  $("#tl").innerHTML = r.tesis.map((t, i) => `<div class="tarjeta"><div class="fila"><span class="chip ${t.jurisprudencia?"j":"a"}">${t.jurisprudencia?"JURISPRUDENCIA":"TESIS AISLADA"}</span>
+    <span class="chip c">${t.coinciden.length} de ${r.terminos.length} palabras</span></div>
+    <div class="t1" style="margin:6px 0;font-family:Georgia,serif">${marcar(t.rubro, r.terminos)}</div>
+    <div class="ficha">${t.ficha.filter(f => f[1]).map(([k, v]) => `<b>${esc(k)}</b><div>${esc(v)}</div>`).join("")}</div>
+    <div class="fila" style="margin-top:8px"><a class="btn s" href="${esc(t.url)}" target="_blank" rel="noopener">↗ Abrir en el SJF</a>
+    <button class="btn s" data-cp="${i}">⎘ Copiar ficha y rubro</button></div></div>`).join("") +
+    (r.tesis.length < r.total ? `<button class="btn" style="width:100%" id="tmas">Cargar más</button>` : "");
+  document.querySelectorAll("[data-cp]").forEach(b => b.onclick = () => { const t = r.tesis[b.dataset.cp];
+    const txt = t.ficha.filter(f => f[1]).map(([k, v]) => `${k}: ${v}`).join("\n") + "\n\n" + t.rubro;
+    (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(() => aviso("Copiado"), () => aviso("No se pudo copiar", 1)); });
+  const mas = $("#tmas"); if (mas) mas.onclick = () => buscarTesis((r.pagina || 0) + 1);
+}
+
+// ── tribunales (sin conexión) ──────────────────────────
+let TF = {distrito: "", materia: "", q: ""};
+function verTribunales() {
+  const dist = [...new Set(D.tribunales.map(t => t.distrito))].sort();
+  const l = D.tribunales.filter(t => (!TF.distrito || t.distrito === TF.distrito) &&
+    (!TF.materia || ("," + t.materias + ",").includes("," + TF.materia + ",")) &&
+    (!TF.q || sa(t.nombre + " " + (t.direccion||"") + " " + (t.telefono||"")).includes(sa(TF.q))));
+  $("#main").innerHTML = `<h2>Tribunales</h2><div class="fila"><select id="td" style="flex:1"><option value="">Todos los distritos</option>${dist.map(d => `<option ${d===TF.distrito?"selected":""}>${esc(d)}</option>`).join("")}</select>
+    <select id="tma" style="flex:1"><option value="">Todas las materias</option>${["Civil","Familiar","Mercantil","Penal","Laboral","Amparo"].map(x => `<option ${x===TF.materia?"selected":""}>${x}</option>`).join("")}</select></div>
+    <input id="tq2" style="margin-top:8px" placeholder="Buscar por nombre, dirección o teléfono" value="${esc(TF.q)}">
+    <div class="t2" style="margin-top:8px">${l.length} tribunal(es)</div>
+    ${l.map(t => `<div class="tarjeta"><div class="t1">${esc(t.nombre)}</div><div class="t2">${esc(t.distrito)} · ${esc((t.materias||"").replaceAll(",", ", "))}</div>
+      ${t.direccion ? `<div class="t2">📍 ${esc(t.direccion)}</div>` : ""}
+      ${t.telefono ? `<div style="margin-top:4px">📞 <a href="tel:${esc(t.telefono.replace(/[^\d+]/g,""))}">${esc(t.telefono)}</a>${t.extensiones ? " ext. " + esc(t.extensiones) : ""}</div>` : ""}</div>`).join("")}`;
+  $("#td").onchange = () => { TF.distrito = $("#td").value; verTribunales(); };
+  $("#tma").onchange = () => { TF.materia = $("#tma").value; verTribunales(); };
+  let t; $("#tq2").oninput = () => { clearTimeout(t); t = setTimeout(() => { TF.q = $("#tq2").value; verTribunales(); $("#tq2").focus(); const v = $("#tq2"); v.setSelectionRange(v.value.length, v.value.length); }, 300); };
+}
+
+// ── versión instalada ──────────────────────────────────
+// La app de Android la anuncia en el identificador del navegador. Sin esto no
+// hay forma de saber qué versión trae la tablet cuando algo sale mal.
+const VERSION_APP = (() => {
+  const m = /AgendaRT\/([\w.]+)/.exec(navigator.userAgent || "");
+  return m ? m[1] : "";
+})();
+
+// ── arranque ───────────────────────────────────────────
+(async () => {
+  // Sin service worker: en Android los archivos ya están dentro de la app.
+  // Pide que el navegador NO desaloje estos datos cuando la tablet ande baja de
+  // espacio. Sin esto, el sistema puede borrar la agenda sin avisar.
+  try { await navigator.storage?.persist?.(); } catch(e) {}
+  await DB.abrir(); await cargar();
+  if (SES && SES.token && D.categorias) iniciar();
+  else pantallaLogin("");
+})();
+</script>
+</body>
+</html>

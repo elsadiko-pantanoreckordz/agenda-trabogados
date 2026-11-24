@@ -1,0 +1,17 @@
+# Monitor de Acuerdos · dependencias con versión fija.
+# La etapa (a) no necesita nada fuera de la biblioteca estándar de Python:
+# sqlite3 con FTS5 viene incluido. Lo de abajo es para las etapas siguientes.
+
+# Etapa (d) · conectores
+httpx==0.28.1                 # peticiones HTTP con tiempo de espera y límites
+selectolax==0.3.27            # lectura de HTML, rápida y sin ejecutar nada
+
+# Etapa (e) · documentos
+pypdf==5.1.0                  # texto de PDFs que ya traen texto
+pytesseract==0.3.13           # OCR para los escaneados (requiere tesseract instalado)
+Pillow==11.0.0                # imágenes para el OCR
+
+# Control de calidad
+ruff==0.16.9
+bandit==1.8.0
+pip-audit==2.7.3

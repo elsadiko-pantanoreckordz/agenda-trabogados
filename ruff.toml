@@ -1,0 +1,16 @@
+# Reglas de revisión del proyecto. Incluye «S» (flake8-bandit), que cubre parte
+# de lo que revisa bandit: útil porque bandit no siempre está instalado.
+line-length = 110
+target-version = "py313"
+
+[lint]
+select = ["E", "W", "F", "I", "UP", "B", "DTZ", "RUF", "S"]
+ignore = ["E501"]        # el largo de línea ya lo controla line-length
+
+[lint.per-file-ignores]
+# En las pruebas, «assert» y las bases temporales son normales.
+"pruebas/*" = ["S101", "S108"]
+# La fecha de hoy se usa solo para decidir si un año de dos dígitos es pasado o
+# futuro; la zona horaria no cambia esa decisión y la función recibe «hoy» para
+# poder probarse.
+"monitor/expedientes.py" = ["DTZ011"]

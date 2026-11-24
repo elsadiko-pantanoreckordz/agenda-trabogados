@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Agenda RT</string>
+    <string name="compartir">Compartir archivo de la agenda</string>
+</resources>

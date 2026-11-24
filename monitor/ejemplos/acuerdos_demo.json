@@ -1,0 +1,32 @@
+[
+  {
+    "fuente": "sonora", "clave": "demo-001",
+    "expediente_crudo": "00452/2026", "juzgado": "Juzgado Tercero de Primera Instancia de lo Civil del Distrito Judicial de Hermosillo",
+    "distrito": "Hermosillo", "materia": "Civil", "jurisdiccion": "Estatal",
+    "partes": "JUAN PEREZ LOPEZ vs CONSTRUCTORA DEL NORTE SA DE CV",
+    "fecha_acuerdo": "2026-11-20", "fecha_publicacion": "2026-11-21",
+    "sintesis": "Se da vista a la parte actora por el termino de tres dias habiles",
+    "texto": "En los autos del expediente 452/2026 se da vista a la parte actora por el termino de tres dias habiles para que manifieste lo que a su derecho convenga.",
+    "url_lista": "https://ejemplo.local/boletin/2026-11-21", "url_documento": ""
+  },
+  {
+    "fuente": "sonora", "clave": "demo-002",
+    "expediente_crudo": "452/2026-II", "juzgado": "Juzgado Tercero de Primera Instancia de lo Civil del Distrito Judicial de Hermosillo",
+    "distrito": "Hermosillo", "materia": "Civil", "jurisdiccion": "Estatal",
+    "partes": "JUAN PEREZ LOPEZ vs CONSTRUCTORA DEL NORTE SA DE CV",
+    "fecha_acuerdo": "2026-11-18", "fecha_publicacion": "2026-11-19",
+    "sintesis": "Se senala audiencia de desahogo de pruebas para el diez de diciembre a las nueve treinta horas",
+    "texto": "Se senala las nueve treinta horas del dia diez de diciembre de dos mil veintiseis para el desahogo de la audiencia de pruebas.",
+    "url_lista": "https://ejemplo.local/boletin/2026-11-19", "url_documento": ""
+  },
+  {
+    "fuente": "federacion", "clave": "demo-003",
+    "expediente_crudo": "1234/2026", "juzgado": "Juzgado Primero de Distrito en el Estado de Sonora",
+    "distrito": "Hermosillo", "materia": "Amparo", "jurisdiccion": "Federal",
+    "partes": "MARIA GONZALEZ RUIZ vs AUTORIDADES RESPONSABLES",
+    "fecha_acuerdo": "2026-11-19", "fecha_publicacion": "2026-11-20",
+    "sintesis": "Se admite la demanda de amparo y se requiere informe justificado",
+    "texto": "Se admite a tramite la demanda de amparo promovida y se requiere a las autoridades responsables el informe justificado.",
+    "url_lista": "https://ejemplo.local/lista/2026-11-20", "url_documento": ""
+  }
+]

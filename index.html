@@ -109,7 +109,7 @@ const DB = { db: null,
   poner(k, v) { return new Promise((ok, mal) => { const t = this.db.transaction("kv", "readwrite");
     t.objectStore("kv").put(v, k); t.oncomplete = ok; t.onerror = () => mal(t.error); }); },
 };
-let D = { eventos: [], expedientes: [], tribunales: [], categorias: null, meta: {}, cola: [] };
+let D = { eventos: [], expedientes: [], tribunales: [], categorias: null, meta: {}, cola: [], peticiones: [], propuestas: [], acuerdos: [], vigilados: [] };
 let SES = null;      // {token, usuario}
 // En GitHub Pages (https) no hay computadora: la app trabaja sola y se sincroniza por archivo.
 const HAY_PC = !/github\.io$/.test(location.hostname);
@@ -279,7 +279,7 @@ function bajar(nombre, obj) {
   const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(obj)], {type: "application/json"}));
   a.download = nombre; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
 }
-const CLAVES_D = ["eventos", "expedientes", "tribunales", "categorias", "meta", "cola"];
+const CLAVES_D = ["eventos", "expedientes", "tribunales", "categorias", "meta", "cola", "peticiones", "propuestas", "acuerdos", "vigilados"];
 function panelArchivo() {
   const f = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "");
   const v = hoja(`<div class="hojacab"><h2 style="margin:0">Sincronizar con la computadora</h2><button class="x">×</button></div>
@@ -288,17 +288,47 @@ function panelArchivo() {
     <div class="t2" style="margin:4px 0 14px">Descarga «cambios_tablet_….json». Guárdalo en OneDrive › Agenda RT; la agenda de la computadora lo importa.</div>
     <label class="btn" style="width:100%;display:block;text-align:center;text-transform:none;letter-spacing:0;font-size:15px;color:var(--txt,inherit);margin:0">⬇ Recibir datos de la computadora<input id="si" type="file" accept=".json,application/json" hidden></label>
     <div class="t2" style="margin:4px 0 14px">Elige el archivo «datos_agenda.json» (OneDrive › Agenda RT). Tus cambios pendientes se conservan.</div>
+    <button class="btn p" style="width:100%" id="sp">⚙ Enviar pendientes al asistente (${D.peticiones.length})</button>
+    <div class="t2" style="margin:4px 0 14px">Genera «pendientes_….json» cifrado. El asistente de la computadora lo lee y te devuelve «propuestas_….json», que recibes con el botón de arriba.</div>
     <button class="btn" style="width:100%" id="sr">⤓ Respaldo completo de la tablet (cifrado)</button>
+    <div class="t2" style="margin:4px 0 0" id="sestado"></div>
 `);
+  // Estado del dispositivo: cuándo fue el último respaldo, qué versión está
+  // instalada y si el sistema prometió no borrar estos datos.
+  (async () => {
+    const e = $("#sestado", v); if (!e) return;
+    const ur = D.meta && D.meta.ultimo_respaldo ? new Date(D.meta.ultimo_respaldo) : null;
+    let persistente = null;
+    try { persistente = await navigator.storage?.persisted?.(); } catch(x) {}
+    e.innerHTML = [
+      ur && !isNaN(ur) ? `Último respaldo: ${ur.toLocaleString("es-MX", {dateStyle: "short", timeStyle: "short"})}`
+                       : "Último respaldo: nunca",
+      VERSION_APP ? `Versión instalada: ${esc(VERSION_APP)}` : "",
+      persistente === true ? "Almacenamiento protegido contra borrado automático."
+        : persistente === false ? "Aviso: el sistema puede borrar estos datos si la tablet se queda sin espacio. Respalda seguido." : "",
+    ].filter(Boolean).join("<br>");
+  })();
   $("#sx").onclick = async () => { if (!D.cola.length) return aviso("No hay cambios pendientes");
     const clave = await pedirClave(); if (!clave) return;
     try {
       bajar(`cambios_tablet_${f}.json`, await cifrarSync({formato: "agenda-rt-cambios", version: 1, generado: new Date().toISOString(), usuario: SES.usuario, cambios: D.cola}, clave, "cambios"));
       aviso("Archivo cifrado generado. Los cambios siguen marcados hasta que recibas los datos de la computadora.");
     } catch(e) { aviso(e.message, 1); } };
+  $("#sp").onclick = async () => {
+    if (!D.peticiones.length) return aviso("La charola está vacía");
+    const clave = await pedirClave(); if (!clave) return;
+    try {
+      bajar(`pendientes_${f}.json`, await cifrarSync({formato: "agenda-rt-peticiones", version: 1, generado: new Date().toISOString(),
+        usuario: SES.usuario, peticiones: D.peticiones, vigilados: D.vigilados || []}, clave, "pendientes"));
+      aviso("Archivo cifrado generado. Los pendientes se quedan en la charola hasta que recibas las propuestas.");
+    } catch(e) { aviso(e.message, 1); } };
   $("#sr").onclick = async () => { const clave = await pedirClave(); if (!clave) return;
-    try { bajar(`respaldo_tablet_${f}.json`, await cifrarSync({formato: "agenda-rt-respaldo", version: 1, generado: new Date().toISOString(), datos: D}, clave, "respaldo_tablet")); }
-    catch(e) { aviso(e.message, 1); } };
+    try {
+      bajar(`respaldo_tablet_${f}.json`, await cifrarSync({formato: "agenda-rt-respaldo", version: 1, generado: new Date().toISOString(), datos: D}, clave, "respaldo_tablet"));
+      // Se anota la fecha para poder avisar cuando pase mucho tiempo sin respaldo.
+      D.meta = Object.assign({}, D.meta, {ultimo_respaldo: new Date().toISOString()});
+      await guardar("meta"); pintarSync();
+    } catch(e) { aviso(e.message, 1); } };
   $("#si").onchange = async ev => {
     const archivo = ev.target.files[0]; ev.target.value = "";
     try {
@@ -306,11 +336,68 @@ function panelArchivo() {
       if (archivo.size > 50 * 1024 * 1024) throw new Error("El archivo es demasiado grande");
       let p = JSON.parse(await archivo.text());
       if (p && p.formato === "agenda-rt-cifrado") {
-        if (!["datos_agenda", "respaldo_tablet"].includes(p.contenido)) throw new Error("Este archivo no es para recibir en la tablet");
+        if (!["datos_agenda", "respaldo_tablet", "propuestas", "acuerdos"].includes(p.contenido)) throw new Error("Este archivo no es para recibir en la tablet");
         const clave = await pedirClave(); if (!clave) return;
         aviso("Descifrando…");
         p = await descifrarSync(p, clave, p.contenido);
       } else if (!confirmarEn("Este archivo NO está cifrado: no se puede comprobar que venga de tu computadora. ¿Usarlo de todos modos?")) return;
+      if (p.formato === "agenda-rt-acuerdos") {
+        if (!Array.isArray(p.acuerdos)) throw new Error("El archivo de acuerdos viene dañado");
+        if (p.acuerdos.length > 5000) throw new Error("El archivo trae demasiados acuerdos");
+        // Lo que llega son datos, no instrucciones: cada campo se recorta y se
+        // guarda como texto. Nada de lo que venga aquí entra solo a la agenda.
+        const texto = (x, max) => String(x ?? "").slice(0, max);
+        const porLlave = new Map((D.acuerdos || []).map(a => [a.uid, a]));
+        let nuevos = 0;
+        for (const x of p.acuerdos) {
+          if (!x || typeof x !== "object") continue;
+          const uid = texto(x.huella || x.uid || x.clave, 80);
+          if (!uid) continue;
+          const previo = porLlave.get(uid);
+          const limpio = {
+            uid, fuente: texto(x.fuente, 40), clave: texto(x.clave, 120),
+            expediente: expCanonico(x.expediente || x.expediente_crudo),
+            expediente_crudo: texto(x.expediente_crudo || x.expediente, 60),
+            juzgado: texto(x.juzgado, 200), distrito: texto(x.distrito, 80),
+            materia: texto(x.materia, 60), jurisdiccion: texto(x.jurisdiccion, 40),
+            partes: texto(x.partes, 400),
+            fecha_acuerdo: /^\d{4}-\d{2}-\d{2}$/.test(x.fecha_acuerdo || "") ? x.fecha_acuerdo : "",
+            fecha_publicacion: /^\d{4}-\d{2}-\d{2}$/.test(x.fecha_publicacion || "") ? x.fecha_publicacion : "",
+            sintesis: texto(x.sintesis, 1000), texto: texto(x.texto, 20000),
+            url_documento: /^https:\/\//.test(x.url_documento || "") ? texto(x.url_documento, 500) : "",
+            nuevo: previo ? previo.nuevo : true,
+          };
+          if (previo) Object.assign(previo, limpio);
+          else { D.acuerdos.push(limpio); porLlave.set(uid, limpio); nuevos++; }
+        }
+        D.acuerdos.sort((a, b) => String(b.fecha_acuerdo || "").localeCompare(String(a.fecha_acuerdo || "")));
+        await guardar("acuerdos");
+        v.remove(); ir("acu");
+        return aviso(`${nuevos} acuerdo(s) nuevos · ${D.acuerdos.length} en total`);
+      }
+      if (p.formato === "agenda-rt-propuestas") {
+        if (!Array.isArray(p.propuestas)) throw new Error("El archivo del asistente viene dañado");
+        if (p.propuestas.length > 500) throw new Error("El archivo trae demasiadas propuestas");
+        const ya = new Set(D.propuestas.map(x => x.uid));
+        let nuevas = 0;
+        for (const x of p.propuestas) {
+          if (!x || typeof x !== "object") continue;
+          const u = String(x.uid || uid());
+          if (ya.has(u)) continue;
+          ya.add(u); nuevas++;
+          D.propuestas.push({uid: u, peticion_uid: x.peticion_uid ? String(x.peticion_uid) : null,
+            resumen: String(x.resumen || "").slice(0, 300), explicacion: String(x.explicacion || "").slice(0, 2000),
+            fundamento: String(x.fundamento || "").slice(0, 300),
+            conteo: Array.isArray(x.conteo) ? x.conteo.slice(0, 120).map(z => String(z).slice(0, 200)) : [],
+            evento: x.evento && typeof x.evento === "object" ? x.evento : null});
+        }
+        // Se sacan de la charola los pendientes que el asistente ya atendió.
+        const atendidas = new Set((Array.isArray(p.peticiones_atendidas) ? p.peticiones_atendidas : []).map(String));
+        if (atendidas.size) D.peticiones = D.peticiones.filter(x => !atendidas.has(x.uid));
+        await guardar("propuestas", "peticiones");
+        v.remove(); ir("asis");
+        return aviso(`${nuevas} propuesta(s) recibidas · revísalas y apruébalas`);
+      }
       if (p.formato === "agenda-rt-respaldo") {
         if (!p.datos || typeof p.datos !== "object") throw new Error("Respaldo dañado");
         for (const k of CLAVES_D) if (k in p.datos) D[k] = p.datos[k];
@@ -356,10 +443,399 @@ function completarLocal(ev) {
   return encolar({uid: uid(), tipo: "completar", id: ev.id || null, evento_uid: ev.id ? null : ev.uid});
 }
 const pendientes = () => D.eventos.filter(e => e.estatus === "Pendiente" || e.estatus === "En proceso");
+
+// ── avisos de riesgo ───────────────────────────────────
+// Todo se calcula aquí, en el dispositivo: no sale ningún dato ni se necesita red.
+const DURACION = {"Audiencia": 120, "Diligencia": 120, "Cita con cliente": 60, "Revisión de expediente": 60, "Reunión": 60, "Cita": 60};
+const enMinutos = h => { const [a, b] = String(h || "").split(":").map(Number); return Number.isFinite(a) ? a * 60 + (b || 0) : null; };
+const masDias = n => { const d = new Date(); d.setDate(d.getDate() + n); return iso(d); };
+// Busca a qué distrito judicial pertenece el juzgado escrito en el evento.
+function distritoDe(juzgado) {
+  const j = sa(juzgado); if (!j || !D.tribunales.length) return null;
+  const t = D.tribunales.find(x => sa(x.nombre) === j) || D.tribunales.find(x => sa(x.nombre) && j.includes(sa(x.nombre)))
+         || D.tribunales.find(x => sa(x.nombre).includes(j));
+  if (t) return t.distrito;
+  // Respaldo: el juzgado se captura como texto libre y puede no coincidir con el
+  // catálogo. Casi siempre trae el distrito en el nombre («…Distrito Judicial de
+  // Hermosillo»), así que se busca el distrito dentro del texto.
+  const d = [...new Set(D.tribunales.map(x => x.distrito))].filter(x => x && j.includes(sa(x)));
+  return d.length === 1 ? d[0] : null;
+}
+function riesgos() {
+  const av = [], hoy = iso(new Date()), p = pendientes();
+  const prox = p.filter(e => e.fecha >= hoy && e.fecha <= masDias(14));
+  const porDia = {};
+  prox.forEach(e => (porDia[e.fecha] = porDia[e.fecha] || []).push(e));
+
+  for (const f of Object.keys(porDia).sort()) {
+    // 1. Compromisos que se enciman o quedan pegados (solo los que tienen hora).
+    const conHora = porDia[f].filter(e => enMinutos(e.hora) !== null).sort((a, b) => enMinutos(a.hora) - enMinutos(b.hora));
+    for (let i = 1; i < conHora.length; i++) {
+      const a = conHora[i - 1], b = conHora[i];
+      const fin = enMinutos(a.hora) + (DURACION[a.tipo] || 60), ini = enMinutos(b.hora);
+      if (ini < fin) av.push({n: 2, t: `${largo(f)}: «${a.titulo}» (${a.hora}) se encima con «${b.titulo}» (${b.hora}).`});
+      else if (ini - fin < 30) av.push({n: 1, t: `${largo(f)}: entre «${a.titulo}» (${a.hora}) y «${b.titulo}» (${b.hora}) quedan menos de 30 minutos.`});
+    }
+    // 2. Diligencias en distritos judiciales distintos el mismo día: el traslado puede no alcanzar.
+    const dis = [...new Set(porDia[f].map(e => distritoDe(e.juzgado)).filter(Boolean))];
+    if (dis.length > 1) av.push({n: 2, t: `${largo(f)}: tienes diligencias en ${dis.join(" y ")}. Revisa si alcanzas el traslado.`});
+  }
+
+  // 3. Vencimiento o vigilancia a tres días o menos sin promoción capturada para ese expediente.
+  p.filter(e => ["Vencimiento", "Vigilancia"].includes(e.tipo) && e.expediente_id && e.fecha >= hoy && e.fecha <= masDias(3))
+   .forEach(e => {
+     const hay = p.some(o => o !== e && o.expediente_id === e.expediente_id && o.tipo === "Promoción / escrito" && o.fecha <= e.fecha);
+     if (!hay) av.push({n: 2, t: `${largo(e.fecha)}: vence «${e.titulo}» y no hay promoción capturada para ese expediente.`});
+   });
+
+  // 4. Acuerdos recibidos que todavía no revisas, en expedientes que vigilas.
+  const sinRevisar = (D.acuerdos || []).filter(a => a.nuevo);
+  if (sinRevisar.length) {
+    const vig = new Set(D.vigilados || []);
+    const propios = sinRevisar.filter(a => vig.has(a.expediente));
+    av.push(propios.length
+      ? {n: 2, t: `${propios.length} acuerdo(s) nuevos en expedientes que vigilas. Revísalos en «Acuerdos».`}
+      : {n: 1, t: `${sinRevisar.length} acuerdo(s) nuevos por revisar en «Acuerdos».`});
+  }
+
+  // 5. Sin respaldo reciente. Si se desinstala la app o se pierde la tablet,
+  //    lo único que salva los expedientes es un respaldo cifrado fuera de aquí.
+  if (D.eventos.length || D.expedientes.length) {
+    const ult = D.meta && D.meta.ultimo_respaldo ? new Date(D.meta.ultimo_respaldo) : null;
+    const dias = ult && !isNaN(ult) ? Math.floor((Date.now() - ult.getTime()) / 86400000) : null;
+    if (dias === null)
+      av.push({n: 2, t: "Nunca has hecho un respaldo. Si desinstalas la app o se pierde la tablet, se pierde todo: «⟳ Compartir datos → Respaldo completo»."});
+    else if (dias >= 7)
+      av.push({n: 2, t: `Tu último respaldo es de hace ${dias} días. Haz uno en «⟳ Compartir datos → Respaldo completo».`});
+  }
+
+  // 6. Expedientes sin un solo movimiento (pasado o futuro) en los últimos 60 días.
+  if (D.expedientes.length) {
+    const corte = masDias(-60);
+    const conMov = new Set(D.eventos.filter(e => e.fecha >= corte).map(e => e.expediente_id).filter(Boolean));
+    const olvidados = D.expedientes.filter(e => !conMov.has(e.id));
+    if (olvidados.length) av.push({n: 0, t: `${olvidados.length} expediente(s) sin movimiento en 60 días: ${olvidados.slice(0, 3).map(numExp).join(", ")}${olvidados.length > 3 ? "…" : ""}`});
+  }
+  return av;
+}
+function panelRiesgos() {
+  const r = riesgos(); if (!r.length) return "";
+  const color = n => n >= 2 ? "var(--rojo)" : n === 1 ? "var(--gold)" : "var(--mut)";
+  return `<h3>Avisos (${r.length})</h3>` +
+    r.map(x => `<div class="tarjeta" style="border-left:4px solid ${color(x.n)}">${esc(x.t)}</div>`).join("");
+}
 const ordenar = l => l.slice().sort((a, b) => (a.fecha + (a.hora || "99")).localeCompare(b.fecha + (b.hora || "99")));
 
+// ── acuerdos: normalización de expedientes ────────────
+// Esto tiene que dar EXACTAMENTE el mismo resultado que monitor/expedientes.py
+// en la computadora; si no, los acuerdos no empatarían con tus expedientes.
+// La tabla de casos que lo comprueba es pruebas/casos_expedientes.json.
+const EXP_ROMANO = "(?:I{1,3}|IV|V|VI{1,3}|IX|X{1,2})";
+const EXP_PATRON = new RegExp(
+  "(\\d{1,6})\\s*[/-]\\s*(\\d{2}|\\d{4})(?!\\s*[/-]?\\s*\\d)" +
+  "(?:\\s*[-/]\\s*(" + EXP_ROMANO + "|BIS|TER|[A-Z])|\\s+(" + EXP_ROMANO + "|BIS|TER))?(?![A-Z0-9])", "g");
+const EXP_ANIO_MIN = 1900, EXP_NUM_MAX = 999999;
+
+function expAnio(crudo, hoy) {
+  const n = Number(crudo), tope = (hoy || new Date()).getFullYear();
+  if (crudo.length === 4) return (n >= EXP_ANIO_MIN && n <= tope + 1) ? n : null;
+  let c = 2000 + n;
+  if (c > tope + 1) c = 1900 + n;
+  return (c >= EXP_ANIO_MIN && c <= tope + 1) ? c : null;
+}
+function expExtraer(texto, hoy) {
+  if (!texto) return [];
+  const limpio = sa(texto).toUpperCase(), salida = [], vistos = new Set();
+  EXP_PATRON.lastIndex = 0;
+  let m;
+  while ((m = EXP_PATRON.exec(limpio)) !== null) {
+    // En vez de mirar hacia atrás con la expresión (que no todos los navegadores
+    // antiguos soportan), se revisa a mano el carácter anterior.
+    const antes = m.index > 0 ? limpio[m.index - 1] : "";
+    if (antes && /[\d/-]/.test(antes)) continue;
+    const num = Number(m[1]), anio = expAnio(m[2], hoy);
+    if (anio === null || !(num >= 1 && num <= EXP_NUM_MAX)) continue;
+    const suf = (m[3] || m[4] || "").toUpperCase();
+    const llave = num + "/" + anio + "-" + suf;
+    if (vistos.has(llave)) continue;
+    vistos.add(llave);
+    salida.push({numero: num, anio, sufijo: suf, canonico: `${num}/${anio}`,
+                 completo: suf ? `${num}/${anio}-${suf}` : `${num}/${anio}`});
+  }
+  return salida;
+}
+const expNormalizar = (texto, hoy) => expExtraer(texto, hoy)[0] || null;
+const expCanonico = (texto, hoy) => { const e = expNormalizar(texto, hoy); return e ? e.canonico : ""; };
+
+// ── acuerdos: búsqueda local ───────────────────────────
+// Todo se busca en el dispositivo, sobre lo que ya recibiste. Sin red.
+let ACU = {texto: "", expediente: "", juzgado: "", materia: "", jurisdiccion: "", parte: "",
+           desde: "", hasta: "", nuevos: false, vigilados: false, filtros: false};
+
+function buscarAcuerdos(f) {
+  const lista = D.acuerdos || [];
+  const escrito = String(f.texto || "").trim();
+  const palabras = sa(escrito).split(/\s+/).filter(x => x.length >= 2);
+  // Igual que en la computadora: si escribiste algo que no deja ninguna palabra
+  // buscable, el resultado es NADA, nunca la lista completa.
+  if (escrito && !palabras.length) return [];
+  const canon = expCanonico(f.expediente || "");
+  const vig = new Set(D.vigilados || []);
+
+  return lista.filter(a => {
+    if (f.nuevos && !a.nuevo) return false;
+    if (f.vigilados && !vig.has(a.expediente)) return false;
+    if (f.expediente) {
+      if (canon) { if (a.expediente !== canon) return false; }
+      else if (!sa(a.expediente_crudo || a.expediente).includes(sa(f.expediente))) return false;
+    }
+    for (const [campo, valor] of [["juzgado", f.juzgado], ["materia", f.materia],
+                                  ["jurisdiccion", f.jurisdiccion], ["partes", f.parte]])
+      if (valor && !sa(a[campo] || "").includes(sa(valor))) return false;
+    if (f.desde && (a.fecha_acuerdo || "") < f.desde) return false;
+    if (f.hasta && (a.fecha_acuerdo || "") > f.hasta) return false;
+    if (palabras.length) {
+      const todo = sa([a.expediente, a.expediente_crudo, a.juzgado, a.partes, a.sintesis, a.texto].join(" "));
+      if (!palabras.every(x => todo.includes(x))) return false;
+    }
+    return true;
+  }).sort((a, b) => String(b.fecha_acuerdo || "").localeCompare(String(a.fecha_acuerdo || "")));
+}
+
+async function alternarVigilancia(canon) {
+  if (!canon) return aviso("Ese acuerdo no trae número de expediente", 1);
+  const v = D.vigilados || (D.vigilados = []);
+  const i = v.indexOf(canon);
+  if (i >= 0) { v.splice(i, 1); aviso(`Ya no se vigila ${canon}`); }
+  else { v.push(canon); aviso(`Se vigilará ${canon} · avísale a la computadora al compartir datos`); }
+  await guardar("vigilados");
+}
+
+function tarjetaAcuerdo(a) {
+  const vig = (D.vigilados || []).includes(a.expediente);
+  return `<div class="tarjeta ${a.nuevo ? "hoy" : ""}" data-ac="${esc(a.uid || a.clave)}">
+    <div class="fila" style="justify-content:space-between;gap:8px">
+      <div style="flex:1;min-width:0">
+        <div class="t1">${esc(a.expediente || a.expediente_crudo || "Sin número")}${a.nuevo ? ' <span class="chip c">nuevo</span>' : ""}${vig ? ' <span class="chip">vigilado</span>' : ""}</div>
+        <div class="t2">${esc(a.fecha_acuerdo || "sin fecha")}${a.materia ? " · " + esc(a.materia) : ""}${a.juzgado ? " · " + esc(a.juzgado) : ""}</div>
+        <div class="t2" style="margin-top:4px">${esc((a.sintesis || "").slice(0, 160))}</div>
+      </div></div></div>`;
+}
+
+function verAcuerdos() {
+  const r = buscarAcuerdos(ACU), total = (D.acuerdos || []).length;
+  const nuevos = (D.acuerdos || []).filter(a => a.nuevo).length;
+  const campo = (id, et, val, tipo) => `<div style="flex:1;min-width:120px"><label>${et}</label><input id="${id}" type="${tipo || "text"}" value="${esc(val || "")}"></div>`;
+
+  $("#main").innerHTML = `<h2>Acuerdos</h2>
+    <div class="t2">${total ? `${total} acuerdo(s) recibidos${nuevos ? `, ${nuevos} sin revisar` : ""}.` :
+      "Todavía no has recibido acuerdos. Los descarga la computadora de los boletines oficiales y llegan en «⟳ Compartir datos»."}</div>
+    <div class="fila" style="margin-top:10px"><input id="aq" style="flex:1" placeholder="Buscar: parte, juzgado, palabras del acuerdo" value="${esc(ACU.texto)}">
+      <button class="btn p" id="ab">Buscar</button></div>
+    <div class="chips" style="margin-top:8px">
+      <button id="af" class="${ACU.filtros ? "on" : ""}">Filtros</button>
+      <button id="an" class="${ACU.nuevos ? "on" : ""}">Solo nuevos</button>
+      <button id="av" class="${ACU.vigilados ? "on" : ""}">Solo vigilados</button>
+      ${ACU.texto || ACU.expediente || ACU.juzgado || ACU.materia || ACU.parte || ACU.desde || ACU.hasta ? `<button id="al">Limpiar</button>` : ""}
+    </div>
+    <div id="afw" style="display:${ACU.filtros ? "block" : "none"};margin-top:8px">
+      <div class="fila">${campo("ae", "Expediente", ACU.expediente)}${campo("am", "Materia", ACU.materia)}</div>
+      <div class="fila">${campo("aj", "Juzgado", ACU.juzgado)}${campo("ap", "Parte", ACU.parte)}</div>
+      <div class="fila">${campo("ad", "Desde", ACU.desde, "date")}${campo("ah", "Hasta", ACU.hasta, "date")}</div>
+    </div>
+    <h3>${r.length} resultado(s)</h3>
+    ${r.length ? r.map(tarjetaAcuerdo).join("") : `<div class="vacio">${total ? "Sin coincidencias con estos filtros." : "Nada que mostrar todavía."}</div>`}`;
+
+  const releer = () => {
+    ACU.texto = $("#aq").value.trim();
+    if (ACU.filtros) {
+      ACU.expediente = $("#ae").value.trim(); ACU.materia = $("#am").value.trim();
+      ACU.juzgado = $("#aj").value.trim(); ACU.parte = $("#ap").value.trim();
+      ACU.desde = $("#ad").value; ACU.hasta = $("#ah").value;
+    }
+    verAcuerdos();
+  };
+  $("#ab").onclick = releer;
+  $("#aq").onkeydown = e => { if (e.key === "Enter") releer(); };
+  $("#af").onclick = () => { ACU.filtros = !ACU.filtros; releer(); };
+  $("#an").onclick = () => { ACU.nuevos = !ACU.nuevos; releer(); };
+  $("#av").onclick = () => { ACU.vigilados = !ACU.vigilados; releer(); };
+  if ($("#al")) $("#al").onclick = () => {
+    ACU = {texto: "", expediente: "", juzgado: "", materia: "", jurisdiccion: "", parte: "",
+           desde: "", hasta: "", nuevos: false, vigilados: false, filtros: ACU.filtros};
+    verAcuerdos();
+  };
+  document.querySelectorAll("[data-ac]").forEach(d => d.onclick = () => {
+    const a = (D.acuerdos || []).find(x => (x.uid || x.clave) === d.dataset.ac);
+    if (a) detalleAcuerdo(a);
+  });
+}
+
+function detalleAcuerdo(a) {
+  const canon = a.expediente || "";
+  const vig = (D.vigilados || []).includes(canon);
+  const exp = canon ? D.expedientes.find(e => numExp(e) === canon) : null;
+  const h = hoja(`<div class="hojacab"><h2 style="margin:0">${esc(canon || a.expediente_crudo || "Acuerdo")}</h2><button class="x">×</button></div>
+    <div class="t2">${esc(a.fecha_acuerdo || "sin fecha")}${a.fecha_publicacion ? " · publicado " + esc(a.fecha_publicacion) : ""}${a.fuente ? " · " + esc(a.fuente) : ""}</div>
+    ${a.juzgado ? `<div class="t2" style="margin-top:6px">🏛 ${esc(a.juzgado)}</div>` : ""}
+    ${a.materia || a.jurisdiccion ? `<div class="fila" style="margin-top:6px"><span class="chip c">${esc(a.materia || "")}</span><span class="chip">${esc(a.jurisdiccion || "")}</span></div>` : ""}
+    ${a.partes ? `<div style="margin-top:8px">${esc(a.partes)}</div>` : ""}
+    ${a.sintesis ? `<div class="tarjeta" style="margin-top:10px">${esc(a.sintesis)}</div>` : ""}
+    ${a.texto ? `<details style="margin-top:8px"><summary class="t2">Ver el texto completo</summary><div class="t2" style="white-space:pre-wrap;margin-top:6px">${esc(a.texto)}</div></details>` : ""}
+    ${exp ? `<div class="t2" style="margin-top:10px">Empata con tu expediente ${esc(numExp(exp))} · ${esc(exp.actor || "")} vs ${esc(exp.demandada || "")}</div>`
+          : canon ? `<div class="t2" style="margin-top:10px;color:var(--gold)">Este expediente no está en tu lista de expedientes.</div>` : ""}
+    <button class="btn p" style="width:100%;margin-top:12px" id="acev">＋ Crear evento desde este acuerdo</button>
+    <button class="btn" style="width:100%;margin-top:8px" id="acvig">${vig ? "Dejar de vigilar" : "Vigilar este expediente"}</button>
+    ${a.url_documento ? `<a class="btn s" style="display:block;text-align:center;margin-top:8px" href="${esc(a.url_documento)}" target="_blank" rel="noopener">↗ Abrir el documento oficial</a>` : ""}
+    <div class="t2" style="margin-top:10px">Lo que ves aquí es informativo y viene del boletín. Verifica en el expediente antes de actuar.</div>`);
+
+  if (a.nuevo) { a.nuevo = false; guardar("acuerdos"); }
+  $("#acvig", h).onclick = async () => { await alternarVigilancia(canon); h.remove(); verAcuerdos(); };
+  $("#acev", h).onclick = () => {
+    h.remove();
+    // Propone, no crea: abre el formulario de siempre con los datos del acuerdo
+    // y tú decides el tipo, la fecha y si se guarda.
+    formEvento(a.fecha_acuerdo && /^\d{4}-\d{2}-\d{2}$/.test(a.fecha_acuerdo) ? a.fecha_acuerdo : iso(new Date()),
+               exp, {titulo: (a.sintesis || "").slice(0, 80),
+                     notas: `Del acuerdo del ${a.fecha_acuerdo || "¿?"} · ${a.fuente || ""}\n${a.sintesis || ""}`});
+  };
+}
+
+// ── asistente: charola de pendientes y propuestas (Modo A) ──
+// El asistente trabaja en la computadora. Aquí solo se guarda lo que le vas a
+// pedir y se revisan sus propuestas: nada sale del dispositivo hasta que tú
+// compartes el archivo cifrado, y nada entra a la agenda sin que lo apruebes.
+const IMG_LADO = 1600, IMG_CALIDAD = 0.7, IMG_MAX = 20 * 1024 * 1024;
+
+function reducirImagen(archivo) {
+  return new Promise((ok, mal) => {
+    if (!/^image\//.test(archivo.type || "")) return mal(new Error("Ese archivo no es una imagen"));
+    if (archivo.size > IMG_MAX) return mal(new Error("La imagen es demasiado grande"));
+    const img = new Image(), url = URL.createObjectURL(archivo);
+    img.onload = () => {
+      const f = Math.min(1, IMG_LADO / Math.max(img.width, img.height));
+      const c = document.createElement("canvas");
+      c.width = Math.max(1, Math.round(img.width * f)); c.height = Math.max(1, Math.round(img.height * f));
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      try { ok(c.toDataURL("image/jpeg", IMG_CALIDAD)); } catch (e) { mal(new Error("No se pudo preparar la imagen")); }
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); mal(new Error("No se pudo leer la imagen")); };
+    img.src = url;
+  });
+}
+
+function formPeticion() {
+  let imagen = null, exp = null;
+  const h = hoja(`<div class="hojacab"><h2 style="margin:0">Dejar pendiente al asistente</h2><button class="x">×</button></div>
+    <p class="t2">Escríbelo como te salga. Ejemplo: «vista por tres días del acuerdo del 452/2026, notificado hoy» o «audiencia de pruebas el martes a las 9:30 en el juzgado tercero civil».</p>
+    <label>Qué necesitas</label><textarea id="ptxt" rows="4"></textarea>
+    <label>Expediente (opcional)</label><input id="pexp" placeholder="Número, actor o demandado" autocomplete="off">
+    <div id="pexpr"></div>
+    <label class="btn" style="width:100%;display:block;text-align:center;text-transform:none;letter-spacing:0;font-size:15px;color:var(--txt);margin:8px 0 0">📷 Agregar foto del acuerdo<input id="pimg" type="file" accept="image/*" capture="environment" hidden></label>
+    <div id="pimgm" class="t2" style="margin-top:6px"></div>
+    <div id="pmsg" style="color:#E06C6C;min-height:22px;margin-top:8px"></div>
+    <button class="btn p" style="width:100%" id="pok">Guardar en la charola</button>`);
+
+  $("#pexp", h).oninput = () => {
+    exp = null; const q = $("#pexp", h).value.trim();
+    if (q.length < 2) return $("#pexpr", h).innerHTML = "";
+    $("#pexpr", h).innerHTML = buscarExp(q).slice(0, 6).map(e => `<div class="tarjeta" data-e="${esc(e.id)}" style="padding:8px 12px">
+      <b>${esc(numExp(e))}</b> · ${esc(e.actor)} vs ${esc(e.demandada)}</div>`).join("") || `<div class="t2">Sin coincidencias</div>`;
+    h.querySelectorAll("[data-e]").forEach(d => d.onclick = () => {
+      exp = D.expedientes.find(x => x.id == d.dataset.e);
+      $("#pexp", h).value = `${numExp(exp)} · ${exp.actor} vs ${exp.demandada}`; $("#pexpr", h).innerHTML = "";
+    });
+  };
+  $("#pimg", h).onchange = async ev => {
+    const a = ev.target.files[0]; ev.target.value = "";
+    if (!a) return;
+    $("#pimgm", h).textContent = "Preparando la imagen…";
+    try { imagen = await reducirImagen(a); $("#pimgm", h).textContent = "Foto lista (se reduce para que el archivo no pese)."; }
+    catch (e) { imagen = null; $("#pimgm", h).textContent = ""; $("#pmsg", h).textContent = e.message; }
+  };
+  $("#pok", h).onclick = async () => {
+    const texto = $("#ptxt", h).value.trim();
+    if (!texto && !imagen) return $("#pmsg", h).textContent = "Escribe qué necesitas o agrega una foto";
+    D.peticiones.push({uid: uid(), clase: imagen ? "imagen" : "texto", texto, imagen,
+      expediente_id: exp ? exp.id : null, expediente_num: exp ? numExp(exp) : "", creado: new Date().toISOString()});
+    await guardar("peticiones");
+    h.remove(); aviso("Guardado en la charola · se envía cuando compartas datos"); ir("asis");
+  };
+  setTimeout(() => $("#ptxt", h).focus(), 150);
+}
+
+// Valida una propuesta recibida antes de dejarla tocar la agenda. Lo que viene en
+// el archivo son datos, nunca instrucciones: aquí se revisa campo por campo.
+function eventoDePropuesta(p) {
+  const e = p && p.evento;
+  if (!e || typeof e !== "object") throw new Error("La propuesta no trae un evento");
+  if (!D.categorias) throw new Error("Faltan tus categorías");
+  const cat = Object.keys(D.categorias.categorias).includes(e.categoria) ? e.categoria : "Asunto del despacho";
+  if (!D.categorias.categorias[cat].includes(e.tipo)) throw new Error(`El tipo «${String(e.tipo).slice(0, 40)}» no existe en tus categorías`);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(e.fecha || "")) throw new Error("La propuesta no trae una fecha válida");
+  let exp = null;
+  if (e.expediente_id != null) exp = D.expedientes.find(x => x.id === e.expediente_id) || null;
+  if (!exp && e.expediente_num) exp = D.expedientes.find(x => numExp(x) === String(e.expediente_num).trim()) || null;
+  return {categoria: cat, tipo: e.tipo, titulo: String(e.titulo || "").trim().slice(0, 200), fecha: e.fecha,
+    hora: /^\d{2}:\d{2}$/.test(e.hora || "") ? e.hora : "",
+    expediente_id: exp ? exp.id : null, lugar: String(e.lugar || (exp ? exp.juzgado : "") || "").slice(0, 200),
+    notas: String(e.notas || "").slice(0, 2000),
+    recordatorios: Array.isArray(e.recordatorios) ? e.recordatorios.map(Number).filter(n => Number.isInteger(n) && n > 0 && n <= 20160).slice(0, 4) : []};
+}
+
+function tarjetaPropuesta(p) {
+  const e = p.evento || {};
+  const conteo = Array.isArray(p.conteo) && p.conteo.length
+    ? `<details style="margin-top:6px"><summary class="t2">Ver el conteo día por día</summary><div class="t2">${p.conteo.map(x => esc(String(x))).join("<br>")}</div></details>` : "";
+  return `<div class="tarjeta" style="border-left:4px solid var(--gold)">
+    <div class="t1">${esc(p.resumen || e.titulo || "Propuesta")}</div>
+    <div class="t2">${esc(e.tipo || "")}${e.fecha ? " · " + esc(largo(e.fecha)) : ""}${e.hora ? " · " + esc(e.hora) : ""}${e.expediente_num ? " · Exp. " + esc(e.expediente_num) : ""}</div>
+    ${p.explicacion ? `<div class="t2" style="margin-top:6px">${esc(p.explicacion)}</div>` : ""}
+    ${p.fundamento ? `<div class="t2" style="margin-top:4px">Fundamento citado: ${esc(p.fundamento)}</div>` : ""}
+    ${conteo}
+    <div class="t2" style="margin-top:6px;color:var(--gold)">Propuesta sin confirmar: verifica el plazo antes de aprobar.</div>
+    <div class="fila" style="margin-top:8px"><button class="btn s p" data-ap="${esc(p.uid)}">✓ Aprobar</button>
+      <button class="btn s" data-de="${esc(p.uid)}">Descartar</button></div></div>`;
+}
+
+function verAsistente() {
+  const pr = D.propuestas || [], pe = D.peticiones || [];
+  $("#main").innerHTML = `<h2>Asistente</h2>
+    <div class="t2">El asistente trabaja en la computadora. Aquí dejas los pendientes y aquí llegan sus propuestas. Nada sale de este dispositivo hasta que tú compartes el archivo cifrado, y nada entra a tu agenda sin que lo apruebes.</div>
+    <h3>Propuestas por revisar (${pr.length})</h3>
+    ${pr.length ? pr.map(tarjetaPropuesta).join("") : `<div class="vacio">Sin propuestas. Llegan al recibir el archivo del asistente en «⟳ Compartir datos».</div>`}
+    <h3>Charola de pendientes (${pe.length})</h3>
+    ${pe.length ? pe.map(x => `<div class="tarjeta"><div class="t2">${esc(new Date(x.creado).toLocaleString("es-MX", {dateStyle: "short", timeStyle: "short"}))}${x.expediente_num ? " · Exp. " + esc(x.expediente_num) : ""}${x.clase === "imagen" ? " · con foto" : ""}</div>
+      <div>${esc(x.texto || "(solo foto)")}</div>
+      <div class="fila" style="margin-top:8px"><button class="btn s" data-bp="${esc(x.uid)}">Quitar</button></div></div>`).join("")
+      : `<div class="vacio">Nada pendiente. Usa el botón + para dejarle trabajo.</div>`}
+    <div class="t2" style="margin-top:12px">Para enviar la charola y recibir las propuestas usa <b>⟳ Compartir datos</b>.</div>`;
+
+  document.querySelectorAll("[data-ap]").forEach(b => b.onclick = async () => {
+    const p = D.propuestas.find(x => x.uid === b.dataset.ap); if (!p) return;
+    try {
+      await crearEventoLocal(eventoDePropuesta(p));
+      D.propuestas = D.propuestas.filter(x => x.uid !== p.uid);
+      await guardar("propuestas");
+      aviso("Aprobado y guardado · se enviará al sincronizar"); verAsistente();
+    } catch (e) { aviso(e.message, 1); }
+  });
+  document.querySelectorAll("[data-de]").forEach(b => b.onclick = async () => {
+    D.propuestas = D.propuestas.filter(x => x.uid !== b.dataset.de);
+    await guardar("propuestas"); verAsistente();
+  });
+  document.querySelectorAll("[data-bp]").forEach(b => b.onclick = async () => {
+    D.peticiones = D.peticiones.filter(x => x.uid !== b.dataset.bp);
+    await guardar("peticiones"); verAsistente();
+  });
+  const f = document.createElement("button");
+  f.className = "fab"; f.textContent = "+"; f.title = "Dejar pendiente";
+  f.onclick = formPeticion; document.body.appendChild(f);
+}
+
 // ── estructura ─────────────────────────────────────────
-const SECC = [["midia","☀","Mi día"],["agenda","📅","Agenda"],["exp","📁","Expedientes"],["tesis","⚖","Tesis"],["trib","🏛","Tribunales"]];
+const SECC = [["midia","☀","Mi día"],["agenda","📅","Agenda"],["exp","📁","Expedientes"],["acu","§","Acuerdos"],["asis","⚙","Asistente"],["tesis","⚖","Tesis"],["trib","🏛","Tribunales"]];
 let PANT = "midia";
 function iniciar() {
   $("#app").innerHTML = `<header><img src="icono.png" alt=""><div style="flex:1;min-width:0"><h1>Agenda RT</h1>
@@ -375,7 +851,7 @@ function ir(k) {
   PANT = k;
   document.querySelectorAll("nav button").forEach(b => b.classList.toggle("on", b.dataset.k === k));
   document.querySelector(".fab")?.remove();
-  ({midia: verMiDia, agenda: verAgenda, exp: verExpedientes, tesis: verTesis, trib: verTribunales})[k]();
+  ({midia: verMiDia, agenda: verAgenda, exp: verExpedientes, acu: verAcuerdos, asis: verAsistente, tesis: verTesis, trib: verTribunales})[k]();
 }
 
 // ── eventos ────────────────────────────────────────────
@@ -404,7 +880,7 @@ function verMiDia() {
   const hoy = iso(new Date()), sem = new Date(); sem.setDate(sem.getDate() + 7);
   const p = ordenar(pendientes());
   const sec = (t, l, c) => `<h3>${t} (${l.length})</h3>` + (l.length ? l.map(e => tarjetaEvento(e, c)).join("") : `<div class="vacio">Nada pendiente.</div>`);
-  $("#main").innerHTML = `<h2>${largo(hoy).replace(/^./, c => c.toUpperCase())}</h2>` +
+  $("#main").innerHTML = `<h2>${largo(hoy).replace(/^./, c => c.toUpperCase())}</h2>` + panelRiesgos() +
     (D.cola.length ? `<div class="tarjeta" style="border-left:4px solid var(--gold)">Tienes ${D.cola.length} cambio(s) guardados en la tablet. Presiona <b>⟳ Sincronizar</b> cuando estés en el Wi-Fi de la computadora.</div>` : "") +
     sec("Atrasados", p.filter(e => e.fecha < hoy), "urg") + sec("Hoy", p.filter(e => e.fecha === hoy), "hoy") +
     sec("Próximos 7 días", p.filter(e => e.fecha > hoy && e.fecha <= iso(sem)), "");
@@ -468,19 +944,20 @@ function buscarExp(q) {
   const l = D.expedientes.filter(e => { const b = sa([e.identificador, numExp(e), e.actor, e.demandada, e.juzgado, e.materia, e.tipo_juicio, e.cliente].join(" ")); return t.every(w => b.includes(w)); });
   return l.sort((a, b) => (+b.ano || 0) - (+a.ano || 0) || (+b.num_expediente || 0) - (+a.num_expediente || 0)).slice(0, 80);
 }
-function formEvento(fecha, expPre) {
+function formEvento(fecha, expPre, pre) {
   const C = D.categorias; let cat = "Asunto del despacho", exp = expPre || null;
+  pre = pre || {};
   const h = hoja(`<div class="hojacab"><h2 style="margin:0">Nuevo evento</h2><button class="x">×</button></div>
     <label>Categoría</label><div class="seg" id="fcat">${Object.keys(C.categorias).map(c => `<button data-c="${esc(c)}">${esc(c)}</button>`).join("")}</div>
     <label>Tipo</label><select id="ftipo"></select>
-    <label>Título *</label><input id="ftit" placeholder="Ej. Audiencia de pruebas">
+    <label>Título *</label><input id="ftit" placeholder="Ej. Audiencia de pruebas" value="${esc(pre.titulo || "")}">
     <div class="fila"><div style="flex:2"><label>Fecha *</label><input id="ffec" type="date" value="${fecha}"></div>
       <div style="flex:1"><label>Hora</label><input id="fhor" type="time"></div></div>
     <div id="fexpw"><label id="fexpl">Expediente</label><input id="fexp" placeholder="Número (917/2026), actor o demandado" autocomplete="off" value="${exp ? esc(numExp(exp) + " · " + exp.actor + " vs " + exp.demandada) : ""}">
       <div id="fexpr"></div></div>
     <label id="flugl">Juzgado / lugar</label><input id="flug" value="${exp ? esc(exp.juzgado || "") : ""}">
     <label>Recordatorio (la computadora avisa)</label><div class="chips" id="frec">${[[15,"15 min"],[30,"30 min"],[60,"1 hora"],[1440,"1 día"]].map(([m,t]) => `<button data-m="${m}">${t} antes</button>`).join("")}</div>
-    <label>Notas</label><textarea id="fnot"></textarea>
+    <label>Notas</label><textarea id="fnot">${esc(pre.notas || "")}</textarea>
     <div id="fmsg" style="color:#E06C6C;min-height:22px;margin-top:8px"></div>
     <button class="btn p" style="width:100%" id="fok">Guardar evento</button>`);
   let recTocado = false;
@@ -604,9 +1081,20 @@ function verTribunales() {
   let t; $("#tq2").oninput = () => { clearTimeout(t); t = setTimeout(() => { TF.q = $("#tq2").value; verTribunales(); $("#tq2").focus(); const v = $("#tq2"); v.setSelectionRange(v.value.length, v.value.length); }, 300); };
 }
 
+// ── versión instalada ──────────────────────────────────
+// La app de Android la anuncia en el identificador del navegador. Sin esto no
+// hay forma de saber qué versión trae la tablet cuando algo sale mal.
+const VERSION_APP = (() => {
+  const m = /AgendaRT\/([\w.]+)/.exec(navigator.userAgent || "");
+  return m ? m[1] : "";
+})();
+
 // ── arranque ───────────────────────────────────────────
 (async () => {
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+  // Pide que el navegador NO desaloje estos datos cuando la tablet ande baja de
+  // espacio. Sin esto, el sistema puede borrar la agenda sin avisar.
+  try { await navigator.storage?.persist?.(); } catch(e) {}
   await DB.abrir(); await cargar();
   if (SES && SES.token && D.categorias) iniciar();
   else pantallaLogin("");
